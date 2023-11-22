@@ -69,7 +69,84 @@ class vector
 				ret_vec.vec[i] = ret_vec.vec[i]/length; 
 			} 
 			return ret_vec;
+		}
 
+		// // remove once operators are validated
+		// vector scalar_multiply(double scalar_input)
+		// {
+		// 	vector ret_vec = *this;
+
+		// 	for (int i = 0; i < dims; i++)
+		// 	{
+		// 		this->vec[i] = this->vec[i]*scalar_input; 
+		// 	} 		
+		// 	return ret_vec;
+
+		// }
+
+
+
+		//returns a vector where input component (eg. wall normal) from this vector (eg velocity)
+		vector remove_component(vector input_vec)
+		{
+			// normalize input
+			vector input_norm = input_vec.normalize();
+
+		    // Compute the projection of velocity onto the wall normal
+			vector projection = input_norm*(this->dot(input_norm));
+
+			// to complete
+			vector ret_vec = (*this)-projection;
+
+			return ret_vec;
+
+
+		}
+
+		vector operator*(double scalar_input)
+		{
+			vector ret_vec = *this;
+			for (int i = 0; i < dims; i++)
+			{
+				this->vec[i] = this->vec[i]*scalar_input; 
+			} 		
+			return ret_vec;
+		}
+
+		vector operator/(double scalar_input)
+		{
+			vector ret_vec = *this;
+			for (int i = 0; i < dims; i++)
+			{
+				this->vec[i] = this->vec[i]/scalar_input; 
+			} 		
+			return ret_vec;
+		}
+
+		vector operator+(vector input)
+		{
+			vector ret_vec = *this;
+			if(is_compatible(input))
+			{
+				for (int i = 0; i < dims; i++)
+				{
+					this->vec[i] = this->vec[i]+input.vec[i]; 
+				} 				
+			}
+			return ret_vec;
+		}
+
+		vector operator-(vector input)
+		{
+			vector ret_vec = *this;
+			if(is_compatible(input))
+			{
+				for (int i = 0; i < dims; i++)
+				{
+					this->vec[i] = this->vec[i]-input.vec[i]; 
+				} 				
+			}
+			return ret_vec;
 		}
 
 		~vector()
@@ -283,6 +360,7 @@ class joint:public render_entity
 			else
 			{
 				std::cout << "ERROR: Joint indexing out of bounds for : " << index << std::endl;
+				return -1;
 			}
 
 		}
