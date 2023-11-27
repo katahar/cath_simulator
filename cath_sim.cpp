@@ -3,6 +3,7 @@
 #include <time.h>
 #include <cmath>
 #include <vector>
+#include <string>
 
 #include <iostream>
 #include "fssimplewindow.h"
@@ -71,22 +72,7 @@ class vector
 			return ret_vec;
 		}
 
-		// // remove once operators are validated
-		// vector scalar_multiply(double scalar_input)
-		// {
-		// 	vector ret_vec = *this;
-
-		// 	for (int i = 0; i < dims; i++)
-		// 	{
-		// 		this->vec[i] = this->vec[i]*scalar_input; 
-		// 	} 		
-		// 	return ret_vec;
-
-		// }
-
-
-
-		//returns a vector where input component (eg. wall normal) from this vector (eg velocity)
+		//returns a vector where input component (eg. wall normal) is removed from this vector (eg velocity)
 		vector remove_component(vector input_vec)
 		{
 			// normalize input
@@ -99,8 +85,18 @@ class vector
 			vector ret_vec = (*this)-projection;
 
 			return ret_vec;
+		}
 
+		//returns a vector where input component direction  (eg. joint tangent) is in this vector (eg velocity)
+		vector keep_component(vector input_vec)
+		{
+			// normalize input
+			vector input_norm = input_vec.normalize();
 
+		    // Compute the projection of velocity onto the joint tangent
+			vector projection = input_norm*(this->dot(input_norm));
+			
+			return projection;
 		}
 
 		vector operator*(double scalar_input)
@@ -277,11 +273,12 @@ class node: public render_entity
 		// const int X = 0;
 		// const int Y = 1;
 
-		joint* reg_joint;
+		// joint* reg_joint;
 		double pos[2];
-		double vel[2];
-		double acc[2];
+		double vel[2] = {0,0};
+		double acc[2] = {0,0};
 		double mass;
+		bool fixed;
 
 		double x, y, radius;
 		std::vector<joint*> connected_joints;
@@ -326,6 +323,43 @@ class node: public render_entity
 			render_entity::DrawCircle(sx,sy,sRad,true);
 		}
 		// @TODO: String
+
+
+		// add_constraint : directly modifies acceleration based on input constraint
+		
+		// move : updates velocity based on acceleration, then updates position based on velocity
+
+		// should only be used for anchor nodes
+		void move_rel(double x, double y) //need to update to include z
+		{
+			pos[0] +=x;
+			pos[1] +=y;
+		}
+
+		void fix_node()
+		{
+			fixed = true;
+		}
+
+		void add_accel(double x, double y)
+		{
+			acc[0] +=x;
+			acc[1] +=y;
+		}
+
+		void set_accel(double x, double y)
+		{
+			acc[0] = x;
+			acc[1] = y;
+		}
+
+		void move(double dt)
+		{
+			vel[0] = vel[0]  + acc[0]*dt;
+			vel[1] = vel[1]  + acc[1]*dt;
+			pos[0] = pos[0]  + vel[0]*dt;
+			pos[1] = pos[1]  + vel[1]*dt;
+		}
 };
 
 class joint:public render_entity
@@ -365,19 +399,26 @@ class joint:public render_entity
 
 		}
 
+		// @TODO: Add angle update function. Maybe at the same time as force prop?
+		std::string to_string()
+		{
+			std::string str =  "(" + std::to_string(this->get_pos(this->X)) + ", " + std::to_string(this->get_pos(this->Y)) + ") \tneutral: " + std::to_string(neutral_angle) + ", angle:" +std::to_string(curent_angle) ;
+		}
+
 		void draw()
 		{
 			int sxn1, syn1, sxn2, syn2, sxj, syj;
 		    glColor3ub(0,0, 255);	
 
-			render_entity::PhysicalCoordToScreenCoord(sxj, syj, get_pos(render_entity::X), get_pos(render_entity::Y));
+			render_entity::PhysicalCoordToScreenCoord( sxj,  syj,  this->get_pos(render_entity::X),  this->get_pos(render_entity::Y));
 			render_entity::PhysicalCoordToScreenCoord(sxn1, syn1, node1->get_pos(render_entity::X), node1->get_pos(render_entity::Y));
 			render_entity::PhysicalCoordToScreenCoord(sxn2, syn2, node2->get_pos(render_entity::X), node2->get_pos(render_entity::Y));
 			render_entity::DrawLine(sxj, syj, sxn1, syn1);
 			render_entity::DrawLine(sxj, syj, sxn2, syn2);
 		}
 
-		// void enforce_constraint()
+		// void enforce_dist_constraint() //just directly moves node based on previous 
+		// void enforce_dist_constraint()
 
 };
 
@@ -409,6 +450,15 @@ class line_obstacle: public render_entity
 			// new_motion 
 		}
 
+		void draw()
+		{
+			int x1, y1, x2, y2;
+		    glColor3ub(0,255, 0);	
+
+			render_entity::PhysicalCoordToScreenCoord(x1, y1, pos[0], pos[1]);
+			render_entity::PhysicalCoordToScreenCoord(x2, y2, pos[2], pos[3]);
+			render_entity::DrawLine(x1, y1, x2, y2);
+		}
 
 };
 
@@ -419,7 +469,7 @@ class catheter
 		std::vector<node*> nodes;
 		int num_nodes, num_joints; //num_nodes = num_joints+1
 
-		
+		node* base_node;
 
 		void build_cath(double x_origin, double y_origin, double x_dir, double y_dir, double joint_distance, int num_segments, double radius)
 		{
@@ -436,6 +486,11 @@ class catheter
 			for(int i = 0; i < num_nodes; i++)
 			{
 				node* temp_node = new node(x_origin + (step_x*i), y_origin + (step_y*i), radius);
+				if(0 == i)
+				{
+					base_node = temp_node;
+					base_node->fix_node();
+				}
 				nodes.push_back(temp_node);
 			}
 
@@ -465,6 +520,12 @@ class catheter
 
 			// std::cout << "cath build complete " << std::endl;
 
+		}
+
+
+		void move(double x, double y)
+		{
+			base_node->move_rel(x,y);
 		}
 
 		void draw()
@@ -507,7 +568,7 @@ int main()
 
 	int key;
 
-	line_obstacle line = line_obstacle(5,5,10,10);
+	line_obstacle line = line_obstacle(7,7,10,5);
 	double norm_vec[2];
 	line.get_normal(norm_vec);
 	std::cout << "the normal of (" << line.pos[0] << ", " << line.pos[1] << "), (" << line.pos[2] << ", " << line.pos[3] << ")";
@@ -517,9 +578,26 @@ int main()
     {
 		FsPollDevice();
 		
+		
+		switch(key)
+        {
+		case FSKEY_UP:
+			// move base up
+			break;
+		case FSKEY_DOWN:
+			// move base down 
+			break;
+        case FSKEY_LEFT:
+            // move base left
+            break;
+        case FSKEY_RIGHT:
+            // move base right
+            break;
+        }
 
 		glClear(GL_DEPTH_BUFFER_BIT|GL_COLOR_BUFFER_BIT);
 		cath.draw();
+		line.draw();
         FsSwapBuffers();
         FsSleep(25);
 	}
