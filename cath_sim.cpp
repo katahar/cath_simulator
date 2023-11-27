@@ -20,6 +20,12 @@ class vector
 		int dims;
 		double* vec; //allocated based on constructor
 
+		vector()
+		{
+			dims = -1;
+			// needs to be instantiated!
+		}
+
 		vector(double x, double y, double z)
 		{
 			dims = 3; 
@@ -51,6 +57,28 @@ class vector
 				}
 			}
 			return 0;
+		}
+
+		double at(int ind)
+		{
+			if (ind<dims)
+			{
+				return vec[ind];
+			}
+			else if(-1 == dims)
+			{
+				std::cout << "ERROR: vector not instantiated."  << std::endl;
+			}
+			else
+			{
+				std::cout << "ERROR: vector indexing out of bounds for : " << ind << std::endl;
+				return -10000;
+			}
+		}
+
+		void update(int index, double value)
+		{
+			vec[index] = value;
 		}
 
 		double get_length()
@@ -274,9 +302,14 @@ class node: public render_entity
 		// const int Y = 1;
 
 		// joint* reg_joint;
-		double pos[2];
-		double vel[2] = {0,0};
-		double acc[2] = {0,0};
+		// double pos[2];
+		// double vel[2] = {0,0};
+		// double acc[2] = {0,0};
+
+		vector pos;
+		vector vel = vector(0,0);
+		vector acc = vector(0,0);
+
 		double mass;
 		bool fixed;
 
@@ -285,27 +318,25 @@ class node: public render_entity
 
 		node(double x, double y, double radius)
 		{
-			pos[0] = x;
-			pos[1] = y;
+			pos = vector(x,y);
+			// pos[0] = x;
+			// pos[1] = y;
 			this->radius = radius;
 		}
 
 		double get_pos(int index)
 		{
-			// @TODO: Add out of bounds handling
-			return pos[index];
+			return pos.at(index);
 		}
 
 		double get_vel(int index)
 		{
-			// @TODO: Add out of bounds handling
-			return vel[index];
+			return vel.at(index);
 		}
 
 		double get_acc(int index)
 		{
-			// @TODO: Add out of bounds handling
-			return acc[index];
+			return acc.at(index);
 		}
 
 		double get_rad()
@@ -319,21 +350,21 @@ class node: public render_entity
 
 			int sRad, sx, sy;
 			render_entity::PhysicalCoordToScreenDim(sRad, radius);
-			render_entity::PhysicalCoordToScreenCoord(sx,sy,pos[render_entity::X], pos[render_entity::Y]);
+			render_entity::PhysicalCoordToScreenCoord(sx,sy,pos.at(render_entity::X), pos.at(render_entity::Y));
 			render_entity::DrawCircle(sx,sy,sRad,true);
 		}
 		// @TODO: String
 
-
-		// add_constraint : directly modifies acceleration based on input constraint
-		
-		// move : updates velocity based on acceleration, then updates position based on velocity
-
 		// should only be used for anchor nodes
-		void move_rel(double x, double y) //need to update to include z
+		void move_rel_pos(double x, double y) //need to update to include z
 		{
-			pos[0] +=x;
-			pos[1] +=y;
+			pos.update(render_entity::X, pos.at(render_entity::X)+x);
+			pos.update(render_entity::Y, pos.at(render_entity::Y)+y);
+		}
+		
+		void move_rel_pos(vector input) //need to update to include z
+		{
+			pos = pos + input;
 		}
 
 		void fix_node()
@@ -343,23 +374,40 @@ class node: public render_entity
 
 		void add_accel(double x, double y)
 		{
-			acc[0] +=x;
-			acc[1] +=y;
+			acc.update(render_entity::X, acc.at(render_entity::X)+x);
+			acc.update(render_entity::Y, acc.at(render_entity::Y)+y);
+		}
+
+		void add_accel(vector input)
+		{
+			acc = acc+input;
 		}
 
 		void set_accel(double x, double y)
 		{
-			acc[0] = x;
-			acc[1] = y;
+			acc = vector(x,y);
 		}
-
+		
+		//updates velocity based on acceleration, then updates position based on velocity
 		void move(double dt)
 		{
-			vel[0] = vel[0]  + acc[0]*dt;
-			vel[1] = vel[1]  + acc[1]*dt;
-			pos[0] = pos[0]  + vel[0]*dt;
-			pos[1] = pos[1]  + vel[1]*dt;
+			// vel[0] = vel[0]  + acc[0]*dt;
+			// vel[1] = vel[1]  + acc[1]*dt;
+			// pos[0] = pos[0]  + vel[0]*dt;
+			// pos[1] = pos[1]  + vel[1]*dt;
+
+			vel = vel + (acc*dt);
+			pos = pos + (vel*dt);
 		}
+
+
+		// add_constraint : directly modifies acceleration based on input constraint
+		void add_constraint(vector constraint)
+		{
+			acc.remove_component(constraint);
+			vel.remove_component(constraint);
+		}
+
 };
 
 class joint:public render_entity
@@ -523,9 +571,19 @@ class catheter
 		}
 
 
-		void move(double x, double y)
+		void move_input(double x, double y)
 		{
-			base_node->move_rel(x,y);
+			base_node->move_rel_pos(x,y);
+		}
+
+		void update(double dt)
+		{
+			// need to update by node and joint simultaneously?
+			for(int i = 0; i < num_nodes; i++)
+			{
+				//causes indexing error
+				// nodes[i]->move(dt);
+			}
 		}
 
 		void draw()
@@ -568,12 +626,15 @@ int main()
 
 	int key;
 
-	line_obstacle line = line_obstacle(7,7,10,5);
+	line_obstacle line = line_obstacle(0,7,10,5);
 	double norm_vec[2];
 	line.get_normal(norm_vec);
 	std::cout << "the normal of (" << line.pos[0] << ", " << line.pos[1] << "), (" << line.pos[2] << ", " << line.pos[3] << ")";
 	std::cout << "is (" << norm_vec[0] << ", " << norm_vec[1] << ")" << std::endl;
 
+
+	double mv_vel = 0.5;
+	double dt = 0.05;
     while(FSKEY_ESC!=(key=FsInkey()))
     {
 		FsPollDevice();
@@ -582,18 +643,20 @@ int main()
 		switch(key)
         {
 		case FSKEY_UP:
-			// move base up
+			cath.move_input(0, mv_vel);
 			break;
 		case FSKEY_DOWN:
-			// move base down 
+			cath.move_input(0, -mv_vel);
 			break;
         case FSKEY_LEFT:
-            // move base left
+			cath.move_input(-mv_vel, 0);
             break;
         case FSKEY_RIGHT:
-            // move base right
+			cath.move_input(mv_vel, 0);
             break;
         }
+
+		cath.update(dt);
 
 		glClear(GL_DEPTH_BUFFER_BIT|GL_COLOR_BUFFER_BIT);
 		cath.draw();
