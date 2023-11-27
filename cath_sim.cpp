@@ -43,6 +43,16 @@ class vector
 			vec[1] = y;
 		}
 
+		vector(const vector& other)
+		{
+			this->dims = other.dims;
+			vec = new double[dims];
+			for(int i = 0; i < dims; i++)
+			{
+				this->vec[i] = other.vec[i];
+			}
+		}
+
 		double dot(vector other_vec)
 		{
 			if(is_compatible(other_vec))
@@ -173,6 +183,15 @@ class vector
 			return ret_vec;
 		}
 
+		void operator=(const vector& input)
+		{
+			this->dims = input.dims;
+			vec = new double[dims];
+			for(int i = 0; i < dims; i++)
+			{
+				this->vec[i] = input.vec[i];
+			}
+		}
 		~vector()
 		{
 			delete[] vec;
@@ -544,12 +563,12 @@ class catheter
 
 
 			//reading nodes
-			// int count = 0;
-			// for(auto iter = nodes.begin(); iter != nodes.end(); iter++)
-			// {
-			// 	std::cout << "node " << count << ": (" << (*iter)->get_pos((*iter)->X) << ", " << (*iter)->get_pos((*iter)->Y) << ")" << std::endl;
-			// 	count++;
-			// }
+			int count = 0;
+			for(auto iter = nodes.begin(); iter != nodes.end(); iter++)
+			{
+				std::cout << "node " << count << ": (" << (*iter)->get_pos((*iter)->X) << ", " << (*iter)->get_pos((*iter)->Y) << ")" << std::endl;
+				count++;
+			}
 
 			//setting joints
 			for(int i = 0; i < num_nodes-1 ; i++)
@@ -559,12 +578,12 @@ class catheter
 			}
 
 			// reading joints
-			// count = 0;
-			// for(auto iter = joints.begin(); iter !=joints.end(); iter++)
-			// {
-			// 	std::cout << "joint " << count << ": (" << (*iter)->get_pos((*iter)->X) << ", " << (*iter)->get_pos((*iter)->Y) << ")" << std::endl;
-			// 	count++;
-			// }
+			count = 0;
+			for(auto iter = joints.begin(); iter !=joints.end(); iter++)
+			{
+				std::cout << "joint " << count << ": (" << (*iter)->get_pos((*iter)->X) << ", " << (*iter)->get_pos((*iter)->Y) << ")" << std::endl;
+				count++;
+			}
 
 			// std::cout << "cath build complete " << std::endl;
 
