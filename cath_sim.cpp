@@ -709,6 +709,7 @@ class catheter
 				std::cout << "node " + std::to_string(i) + ": " + nodes[i+1]->to_string() << std::endl;
 				nodes[i+1]->move(dt);
 			}
+			nodes[num_nodes-1]->reset();
 			std::cout << "---------------------------------" << std::endl;
 
 		}
