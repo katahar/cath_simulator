@@ -125,6 +125,17 @@ class vector
 			return ret_vec;
 		}
 
+		std::string to_string()
+		{
+			std::string ret_str = "(";
+			for(int i =0; i < dims; i++)
+			{
+				ret_str = ret_str + std::to_string(vec[i]) + ", ";
+			}
+			ret_str = ret_str + ")";
+			return ret_str;
+		}
+
 		//returns a vector where input component direction  (eg. joint tangent) is in this vector (eg velocity)
 		vector keep_component(vector input_vec)
 		{
@@ -142,7 +153,7 @@ class vector
 			vector ret_vec = *this;
 			for (int i = 0; i < dims; i++)
 			{
-				this->vec[i] = this->vec[i]*scalar_input; 
+				ret_vec.vec[i] = ret_vec.vec[i]*scalar_input; 
 			} 		
 			return ret_vec;
 		}
@@ -152,7 +163,7 @@ class vector
 			vector ret_vec = *this;
 			for (int i = 0; i < dims; i++)
 			{
-				this->vec[i] = this->vec[i]/scalar_input; 
+				ret_vec.vec[i] = ret_vec.vec[i]/scalar_input; 
 			} 		
 			return ret_vec;
 		}
@@ -164,7 +175,7 @@ class vector
 			{
 				for (int i = 0; i < dims; i++)
 				{
-					this->vec[i] = this->vec[i]+input.vec[i]; 
+					ret_vec.vec[i] = ret_vec.vec[i]+input.vec[i]; 
 				} 				
 			}
 			return ret_vec;
@@ -177,7 +188,7 @@ class vector
 			{
 				for (int i = 0; i < dims; i++)
 				{
-					this->vec[i] = this->vec[i]-input.vec[i]; 
+					ret_vec.vec[i] = ret_vec.vec[i]-input.vec[i]; 
 				} 				
 			}
 			return ret_vec;
@@ -192,6 +203,7 @@ class vector
 				this->vec[i] = input.vec[i];
 			}
 		}
+		
 		~vector()
 		{
 			delete[] vec;
@@ -348,6 +360,11 @@ class node: public render_entity
 			return pos.at(index);
 		}
 
+		vector get_pos()
+		{
+			return pos;
+		}
+
 		double get_vel(int index)
 		{
 			return vel.at(index);
@@ -419,12 +436,29 @@ class node: public render_entity
 			pos = pos + (vel*dt);
 		}
 
+		double dist(node* other)
+		{
+			return (other->pos-this->pos).get_length();
+		}
+
+		void reset()
+		{
+			vel = vector(0,0);
+			acc = vector(0,0);
+		}
 
 		// add_constraint : directly modifies acceleration based on input constraint
 		void add_constraint(vector constraint)
 		{
 			acc.remove_component(constraint);
 			vel.remove_component(constraint);
+		}
+
+		std::string to_string()
+		{
+			// std::string str =  "pos: (" + std::to_string(this->get_pos(this->X)) + ", " + std::to_string(this->get_pos(this->Y)) + ") \tvel: (" + std::to_string(vel.at(this->X)) + ", " + std::to_string(vel.at(this->Y))  + ") \tacc: (" + std::to_string(acc.at(this->X)) + ", " + std::to_string(acc.at(this->Y)) +")" ;
+			std:: string str = "pos: " + pos.to_string() + "\t vel: " + vel.to_string() + "\t acc: " + acc.to_string();
+			return str;
 		}
 
 };
@@ -439,9 +473,10 @@ class joint:public render_entity
 		node* node1;
 		node* node2;
 		double neutral_angle = 0;
-		double curent_angle;
+		double current_angle;
 		double spring_constant = 5; 
 		double joint_distance = 0; //distance between two bodies. Body to joint "center" is joint_distance/2
+		double dist_tol = 0.05; //meters
 
 		joint(node* node1, node* node2, double neutral_angle, double spring_const)
 		{
@@ -466,10 +501,15 @@ class joint:public render_entity
 
 		}
 
+		vector get_pos()
+		{
+			return (node1->get_pos()+node2->get_pos())/2;
+		}
+
 		// @TODO: Add angle update function. Maybe at the same time as force prop?
 		std::string to_string()
 		{
-			std::string str =  "(" + std::to_string(this->get_pos(this->X)) + ", " + std::to_string(this->get_pos(this->Y)) + ") \tneutral: " + std::to_string(neutral_angle) + ", angle:" +std::to_string(curent_angle) ;
+			std::string str =  "(" + std::to_string(this->get_pos(this->X)) + ", " + std::to_string(this->get_pos(this->Y)) + ") \tneutral: " + std::to_string(neutral_angle) + ", angle:" +std::to_string(current_angle) ;
 		}
 
 		void draw()
@@ -484,9 +524,67 @@ class joint:public render_entity
 			render_entity::DrawLine(sxj, syj, sxn2, syn2);
 		}
 
-		// void enforce_dist_constraint() //just directly moves node based on previous 
-		// void enforce_dist_constraint()
+		double joint_dist_sq(node* node)
+		{
+			double joint_x = this->get_pos(render_entity::X);
+			double joint_y = this->get_pos(render_entity::Y);
+			return ((node->get_pos(render_entity::X)-joint_x)*(node->get_pos(render_entity::X)-joint_x)) + ((node->get_pos(render_entity::Y)-joint_y)*(node->get_pos(render_entity::Y)-joint_y));
+		}
 
+		double joint_dist(node* node)
+		{
+			return sqrt(this->joint_dist_sq(node));
+		}
+		
+		node* get_other(node* input)
+		{
+			if(input==node1 || input == node2)
+			{
+				if(input == node1)
+				{
+					return node2;
+				}
+				else
+				{
+					return node1;
+				}
+			}
+			std::cout << "ERROR: node not connected to this joint." << std::endl;
+			return nullptr;
+		}
+
+		double get_angle()
+		{
+			vector joint_pos = this->get_pos();
+			double numer = node1->get_pos().dot(node2->get_pos());
+			double denom = node1->get_pos().get_length() * node2->get_pos().get_length();
+			current_angle = acos(numer/denom);
+			return current_angle;
+		}
+
+		// should attempt to resolve within one timestep. input is the node that was most recently moved.
+		void enforce_dist_constraint(node* last_node, double dt)
+		{
+			//target distance between two nodes in a joint from law of cosines.
+			node* move_node = this->get_other(last_node);
+			double cur_angle = this->get_angle();
+			double half_joint_dist = (joint_distance/2);
+			double goal_len = sqrt( 2*(half_joint_dist*half_joint_dist)  + (2*half_joint_dist*half_joint_dist*cos(cur_angle)));
+			double cur_len  = sqrt(joint_dist_sq(node1) + joint_dist_sq(node2) + (2*joint_dist(node1)*joint_dist(node2)*cos(cur_angle)));
+
+			if(abs(cur_len-goal_len) > dist_tol)
+			{
+				std::cout << "enforcing distance!" << cur_len-goal_len;
+				vector norm_dist = (move_node->get_pos()-last_node->get_pos()).normalize();
+				vector target_motion = norm_dist*(goal_len-cur_len);
+				std::cout << "\ttarget motion " << target_motion.to_string();
+				std::cout << "\tapplied acc " << (target_motion/(dt*dt)).to_string() << std::endl;
+				// assuming that target_dist/dt^2 = acceleration
+				move_node->add_accel(target_motion/(dt*dt));
+			}
+		}
+
+		
 };
 
 
@@ -598,11 +696,21 @@ class catheter
 		void update(double dt)
 		{
 			// need to update by node and joint simultaneously?
-			for(int i = 0; i < num_nodes; i++)
+			// for(int i = 1; i < num_nodes; i++)
+			// {
+			// 	//causes indexing error
+			// 	nodes[i]->move(dt);
+			// }
+
+			for(int i = 0; i < num_joints; i ++)
 			{
-				//causes indexing error
-				// nodes[i]->move(dt);
+				nodes[i]->reset();
+				joints[i]->enforce_dist_constraint(nodes[i],dt);
+				std::cout << "node " + std::to_string(i) + ": " + nodes[i+1]->to_string() << std::endl;
+				nodes[i+1]->move(dt);
 			}
+			std::cout << "---------------------------------" << std::endl;
+
 		}
 
 		void draw()
@@ -632,9 +740,15 @@ class catheter
 
 int main()
 {
-	std::cout <<" hello" << std::endl;
+	// std::cout <<" hello" << std::endl;
+	// vector test_vec = vector(1,1);
+	// std::cout << "division: " << (test_vec/2).to_string() << std::endl;
+	// std::cout << "multiplication: " << (test_vec*2).to_string() << std::endl;
+	// std::cout << "addition: " << (test_vec+test_vec).to_string() << std::endl;
+	// std::cout << "subtraction: " << (test_vec-test_vec).to_string() << std::endl;
+
 	catheter cath; 
-	cath.build_cath(0,0,1,1,1.5,5,0.25);
+	cath.build_cath(0,0,1,1,1.5,3,0.25);
 
 
 
@@ -645,7 +759,7 @@ int main()
 
 	int key;
 
-	line_obstacle line = line_obstacle(0,7,10,5);
+	line_obstacle line = line_obstacle(5,7,10,5);
 	double norm_vec[2];
 	line.get_normal(norm_vec);
 	std::cout << "the normal of (" << line.pos[0] << ", " << line.pos[1] << "), (" << line.pos[2] << ", " << line.pos[3] << ")";
