@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <cmath>
+#include <math.h>
 #include <vector>
 #include <string>
 
@@ -11,6 +11,7 @@
 // #include <Eigen3/Dense>
 
 
+#define PI 3.14159265
 class node;
 class joint;
 
@@ -51,6 +52,20 @@ class vector
 			{
 				this->vec[i] = other.vec[i];
 			}
+		}
+
+		// @TODO: update for 3d
+		//finds the perpendicular of the current vector facing toward the target vector, normalized
+		vector get_perpen_toward(vector target)
+		{
+			vector perpendicular = vector(-vec[1], vec[0]);
+			if(target.dot(perpendicular) < 0) //obtuse angle, facing toward target
+			{
+				return perpendicular;
+			}
+			perpendicular = vector(vec[1], -vec[0]);
+			return perpendicular.normalize();
+
 		}
 
 		double dot(vector other_vec)
@@ -472,11 +487,14 @@ class joint:public render_entity
 
 		node* node1;
 		node* node2;
-		double neutral_angle = 0;
+		double neutral_angle = PI; //angle between adjacent nodes
 		double current_angle;
-		double spring_constant = 5; 
+		vector current_pos;
+		double spring_constant = 20; 
 		double joint_distance = 0; //distance between two bodies. Body to joint "center" is joint_distance/2
 		double dist_tol = 0.05; //meters
+		double angle_tol = 10*PI/180; //meters
+		
 
 		joint(node* node1, node* node2, double neutral_angle, double spring_const)
 		{
@@ -501,15 +519,16 @@ class joint:public render_entity
 
 		}
 
-		vector get_pos()
+		vector update_pos()
 		{
-			return (node1->get_pos()+node2->get_pos())/2;
+			current_pos = (node1->get_pos()+node2->get_pos())/2;
+			return current_pos;
 		}
 
 		// @TODO: Add angle update function. Maybe at the same time as force prop?
 		std::string to_string()
 		{
-			std::string str =  "(" + std::to_string(this->get_pos(this->X)) + ", " + std::to_string(this->get_pos(this->Y)) + ") \tneutral: " + std::to_string(neutral_angle) + ", angle:" +std::to_string(current_angle) ;
+			std::string str =  "(" + std::to_string(this->current_pos.at(this->X)) + ", " + std::to_string(this->current_pos.at(this->Y)) + ") \tneutral: " + std::to_string(neutral_angle) + ", angle:" +std::to_string(current_angle) ;
 		}
 
 		void draw()
@@ -517,7 +536,7 @@ class joint:public render_entity
 			int sxn1, syn1, sxn2, syn2, sxj, syj;
 		    glColor3ub(0,0, 255);	
 
-			render_entity::PhysicalCoordToScreenCoord( sxj,  syj,  this->get_pos(render_entity::X),  this->get_pos(render_entity::Y));
+			render_entity::PhysicalCoordToScreenCoord( sxj,  syj,  this->current_pos.at(render_entity::X),  this->current_pos.at(render_entity::Y));
 			render_entity::PhysicalCoordToScreenCoord(sxn1, syn1, node1->get_pos(render_entity::X), node1->get_pos(render_entity::Y));
 			render_entity::PhysicalCoordToScreenCoord(sxn2, syn2, node2->get_pos(render_entity::X), node2->get_pos(render_entity::Y));
 			render_entity::DrawLine(sxj, syj, sxn1, syn1);
@@ -526,8 +545,8 @@ class joint:public render_entity
 
 		double joint_dist_sq(node* node)
 		{
-			double joint_x = this->get_pos(render_entity::X);
-			double joint_y = this->get_pos(render_entity::Y);
+			double joint_x = this->current_pos.at(render_entity::X);
+			double joint_y = this->current_pos.at(render_entity::Y);
 			return ((node->get_pos(render_entity::X)-joint_x)*(node->get_pos(render_entity::X)-joint_x)) + ((node->get_pos(render_entity::Y)-joint_y)*(node->get_pos(render_entity::Y)-joint_y));
 		}
 
@@ -553,13 +572,19 @@ class joint:public render_entity
 			return nullptr;
 		}
 
-		double get_angle()
+		double update_angle()
 		{
-			vector joint_pos = this->get_pos();
 			double numer = node1->get_pos().dot(node2->get_pos());
 			double denom = node1->get_pos().get_length() * node2->get_pos().get_length();
 			current_angle = acos(numer/denom);
 			return current_angle;
+		}
+
+		// really just updates the angle ahead of time
+		void reset()
+		{
+			update_angle();
+			update_pos();
 		}
 
 		// should attempt to resolve within one timestep. input is the node that was most recently moved.
@@ -567,7 +592,8 @@ class joint:public render_entity
 		{
 			//target distance between two nodes in a joint from law of cosines.
 			node* move_node = this->get_other(last_node);
-			double cur_angle = this->get_angle();
+			// double cur_angle = this->get_angle(); //moved to reset function
+			double cur_angle = current_angle;
 			double half_joint_dist = (joint_distance/2);
 			double goal_len = sqrt( 2*(half_joint_dist*half_joint_dist)  + (2*half_joint_dist*half_joint_dist*cos(cur_angle)));
 			double cur_len  = sqrt(joint_dist_sq(node1) + joint_dist_sq(node2) + (2*joint_dist(node1)*joint_dist(node2)*cos(cur_angle)));
@@ -581,6 +607,37 @@ class joint:public render_entity
 				std::cout << "\tapplied acc " << (target_motion/(dt*dt)).to_string() << std::endl;
 				// assuming that target_dist/dt^2 = acceleration
 				move_node->add_accel(target_motion/(dt*dt));
+			}
+		}
+
+		void apply_bending_force(node* last_node)
+		{
+			// cmath uses radians.
+			if(abs(current_angle-neutral_angle) > angle_tol)
+			{
+
+				node* move_node = this->get_other(last_node);
+				std::cout << "enforcing angle " << std::to_string(current_angle-neutral_angle);
+				vector A = this->current_pos-last_node->get_pos();
+				vector B = move_node->get_pos() -this->current_pos;
+				vector force_dir = B.get_perpen_toward(A); //normalized direction of force
+				std::cout << "\tforce direction " << force_dir.to_string();
+				std::cout << "\tapplied acceleration " << (force_dir*(spring_constant*abs(current_angle-neutral_angle))).to_string() << std::endl;
+
+				// force = k*theta
+				move_node->add_accel(force_dir*(spring_constant*abs(current_angle-neutral_angle)));
+				
+				
+				//              move_node
+				//                 /
+				//                /   vector B
+				//               /
+				//            joint 
+				//              |
+				//              |    vector A
+ 				//              |
+				//          last_node
+
 			}
 		}
 
@@ -695,17 +752,15 @@ class catheter
 
 		void update(double dt)
 		{
-			// need to update by node and joint simultaneously?
-			// for(int i = 1; i < num_nodes; i++)
-			// {
-			// 	//causes indexing error
-			// 	nodes[i]->move(dt);
-			// }
-
+			
 			for(int i = 0; i < num_joints; i ++)
 			{
 				nodes[i]->reset();
+				joints[i]->reset();
+
 				joints[i]->enforce_dist_constraint(nodes[i],dt);
+				// std::cout << "distance constraint enforced. " <<  std::to_string(i) << std::endl;
+				joints[i]->apply_bending_force(nodes[i]);
 				std::cout << "node " + std::to_string(i) + ": " + nodes[i+1]->to_string() << std::endl;
 				nodes[i+1]->move(dt);
 			}
@@ -748,8 +803,22 @@ int main()
 	// std::cout << "addition: " << (test_vec+test_vec).to_string() << std::endl;
 	// std::cout << "subtraction: " << (test_vec-test_vec).to_string() << std::endl;
 
+
+		vector A = vector(0,1);
+		vector B = vector(0.7,0.7);
+		double numer = A.dot(B);
+		double denom = A.get_length() * B.get_length();
+		double ang_r = acos(numer/denom);
+		std::cout << "Angle on right: " << std::to_string(A.dot(B));
+		
+		vector C = vector(0.7,-0.7);
+		 numer = A.dot(C);
+		 denom = A.get_length() * B.get_length();
+		double ang_l = acos(numer/denom);
+		std::cout << "Angle on Left" << std::to_string(A.dot(C)) <<std::endl;
+
 	catheter cath; 
-	cath.build_cath(0,0,1,1,1.5,3,0.25);
+	cath.build_cath(1,1,0,1,1.5,3,0.25);
 
 
 
