@@ -598,7 +598,7 @@ class node: public render_entity
 				// direction of motion away from last_node toward current node
 				vector move_dir = (this->get_pos()-last_node->get_pos()).normalize();
 				
-				double move_dist = this->dist(last_node)-joint_distance;
+				double move_dist = joint_distance-this->dist(last_node);
 				
 				vector target_motion = move_dir*(move_dist);
 				
@@ -608,31 +608,31 @@ class node: public render_entity
 				
 			}
 
-
-			if(!this->is_terminal())
-			{
-				node* other_node = this->get_other(last_node);
+			// this is probably redundant, so removed for now.
+			// if(!this->is_terminal())
+			// {
+			// 	node* other_node = this->get_other(last_node);
 				
-				double self_other_dist_sq = this->dist_sq(other_node);
+			// 	double self_other_dist_sq = this->dist_sq(other_node);
 				
-				// distance from current node to other_node is outside of tolerance
-				if(abs(self_other_dist_sq-target_dist_sq) > dist_tol)
-				{
-					// direction of motion away from current node toward other_node
+			// 	// distance from current node to other_node is outside of tolerance
+			// 	if(abs(self_other_dist_sq-target_dist_sq) > dist_tol)
+			// 	{
+			// 		// direction of motion away from current node toward other_node
 					
-					vector move_dir = (other_node->get_pos()-this->get_pos()).normalize();
+			// 		vector move_dir = (other_node->get_pos()-this->get_pos()).normalize();
 					
-					double move_dist = this->dist(other_node)-joint_distance;
+			// 		double move_dist = this->dist(other_node)-joint_distance;
 					
-					vector target_motion = move_dir*(move_dist);
+			// 		vector target_motion = move_dir*(move_dist);
 					
-					vector accel_other = target_motion/(dt*dt);
+			// 		vector accel_other = target_motion/(dt*dt);
 					
-					this->add_accel(accel_curr_node+accel_other);
+			// 		this->add_accel(accel_curr_node+accel_other);
 					
 				
-				}
-			}
+			// 	}
+			// }
 			
 
 		}
@@ -789,12 +789,12 @@ class catheter : public render_entity
 				std::cout << "done" << std::endl;
 				// std::cout << "distance constraint enforced. " <<  std::to_string(i) << std::endl;
 				
-				std::cout << "bending force for joint " <<  std::to_string(i) << "...." <<std::endl;
-				nodes[i]->apply_bending_force(nodes[i-1]);
-				std::cout << "\tdone" << std::endl;
+				// std::cout << "bending force for joint " <<  std::to_string(i) << "...." <<std::endl;
+				// nodes[i]->apply_bending_force(nodes[i-1]);
+				// std::cout << "\tdone" << std::endl;
 
 				std::cout << "node " + std::to_string(i)<< std::endl;
-				
+
 				
 				nodes[i]->move(dt);				
 			}
