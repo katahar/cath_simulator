@@ -578,7 +578,7 @@ class node: public render_entity
 		}
 
 		// should attempt to resolve within one timestep. input is the node that was most recently moved.
-		//attempts to move self and other node
+		//moves self 
 		void enforce_dist_constraint(node* last_node, double dt)
 		{
 
@@ -591,6 +591,8 @@ class node: public render_entity
 			// applied acceleration of current node. used to fix acceration of other node.
 			vector accel_curr_node = vector(0,0);
 			
+			// this is probably redundant, so removed for now.
+
 			// distance from last_node and current node is outside of tolerance
 			if(abs(last_self_dist_sq-target_dist_sq) > dist_tol)
 			{
@@ -608,7 +610,6 @@ class node: public render_entity
 				
 			}
 
-			// this is probably redundant, so removed for now.
 			// if(!this->is_terminal())
 			// {
 			// 	node* other_node = this->get_other(last_node);
@@ -628,7 +629,7 @@ class node: public render_entity
 					
 			// 		vector accel_other = target_motion/(dt*dt);
 					
-			// 		this->add_accel(accel_curr_node+accel_other);
+			// 		other_node->add_accel(accel_curr_node+accel_other);
 					
 				
 			// 	}
@@ -784,7 +785,7 @@ class catheter : public render_entity
 				nodes[i]->reset();
 
 				
-				std::cout << "enforcing distance constraint for joint " <<  std::to_string(i) << "....";
+				std::cout << "enforcing distance constraint for node " <<  std::to_string(i) << "....";
 				nodes[i]->enforce_dist_constraint(nodes[i-1],dt);
 				std::cout << "done" << std::endl;
 				// std::cout << "distance constraint enforced. " <<  std::to_string(i) << std::endl;
@@ -797,6 +798,10 @@ class catheter : public render_entity
 
 				
 				nodes[i]->move(dt);				
+				// if(!nodes[i]->is_terminal())
+				// {
+				// 	nodes[i+1]->move(dt);				
+				// }
 			}
 			nodes[num_nodes-1]->reset();
 			std::cout << "---------------------------------" << std::endl;
