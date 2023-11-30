@@ -4,6 +4,7 @@
 #include <math.h>
 #include <vector>
 #include <string>
+#include <algorithm>
 
 #include <iostream>
 #include "fssimplewindow.h"
@@ -343,14 +344,14 @@ class node: public render_entity
 {
 	public:
 
-		// moved to parent class
-		// const int X = 0;
-		// const int Y = 1;
-
-		// joint* reg_joint;
-		// double pos[2];
-		// double vel[2] = {0,0};
-		// double acc[2] = {0,0};
+		// node* node1;
+		// node* node2;
+		double neutral_angle = PI; //angle between adjacent nodes
+		double current_angle;
+		double spring_constant = 20; 
+		double joint_distance = 0; //distance between two bodies. Body to joint "center" is joint_distance/2
+		double dist_tol = 0.05; //meters
+		double angle_tol = 10*PI/180; //meters
 
 		vector pos;
 		vector vel = vector(0,0);
@@ -359,16 +360,51 @@ class node: public render_entity
 		double mass;
 		bool fixed;
 
-		double x, y, radius;
-		std::vector<joint*> connected_joints;
+		double radius;
+		std::vector<node*> connected_nodes;
 
-		node(double x, double y, double radius)
+
+		node(double x, double y, double radius, double neutral_angle, double spring_const, double joint_dist)
 		{
 			pos = vector(x,y);
 			// pos[0] = x;
-			// pos[1] = y;
 			this->radius = radius;
+			this->neutral_angle = neutral_angle;
+			this->spring_constant = spring_const;
+			// this->joint_distance = hypot(node1->get_pos(node1->X)- node2->get_pos(node2->X), node1->get_pos(node1->Y)- node2->get_pos(node2->Y));
+			this->joint_distance = joint_dist;
+			this->reset();
 		}
+
+		
+		bool connected_to(node* other_node)
+		{
+			if(!connected_nodes.empty())
+			{
+				//already connected
+				if(std::find(connected_nodes.begin(), connected_nodes.end(), other_node) != connected_nodes.end()) 
+				{
+					return true; 
+				}
+			}
+			return false;
+		}
+
+		// bidirectional connection
+		void connect_node(node* other_node)
+		{
+			if(!this->connected_to(other_node))
+			{
+				this->connected_nodes.push_back(other_node);
+				
+				if(!other_node->connected_to(this))
+				{
+					other_node->connected_nodes.push_back(this);
+				}
+				
+			}
+		}
+
 
 		double get_pos(int index)
 		{
@@ -394,6 +430,25 @@ class node: public render_entity
 		{
 			return this->radius;
 		}
+
+		// using dot product definition
+		double update_angle()
+		{
+			if(!this->is_terminal())
+			{
+				vector A = connected_nodes[0]->get_pos() - this->get_pos();
+				vector B = connected_nodes[1]->get_pos() - this->get_pos();
+				double numer = A.dot(B);
+				double denom = A.get_length() * B.get_length();
+				current_angle = acos(numer/denom);
+			}
+			else
+			{
+				current_angle = 0;
+			}
+			return current_angle;
+		}
+
 
 		void draw()
 		{
@@ -451,15 +506,11 @@ class node: public render_entity
 			pos = pos + (vel*dt);
 		}
 
-		double dist(node* other)
-		{
-			return (other->pos-this->pos).get_length();
-		}
-
 		void reset()
 		{
 			vel = vector(0,0);
 			acc = vector(0,0);
+			update_angle();
 		}
 
 		// add_constraint : directly modifies acceleration based on input constraint
@@ -469,181 +520,164 @@ class node: public render_entity
 			vel.remove_component(constraint);
 		}
 
+		double dist_sq(node* node)
+		{
+			
+			double joint_x = this->pos.at(render_entity::X);
+			
+			double joint_y = this->pos.at(render_entity::Y);
+			
+			return ((node->get_pos(render_entity::X)-joint_x)*(node->get_pos(render_entity::X)-joint_x)) + ((node->get_pos(render_entity::Y)-joint_y)*(node->get_pos(render_entity::Y)-joint_y));
+		}
+
+		double dist(node* node)
+		{
+			return sqrt(this->dist_sq(node));
+		}
+		
+		bool is_terminal()
+		{
+			if(this->connected_nodes.empty())
+			{
+				std::cout << "WARNING: Orphan node!" << std::endl;
+			}
+			return this->connected_nodes.size()<=1;
+		}
+
+
+		// assumes that each node is connected to up to two other nodes
+		node* get_other(node* input)
+		{
+			if(!this->is_terminal() && this->connected_to(input))
+			{
+				if(connected_nodes[0]== input)
+				{
+					return connected_nodes[1];
+				}
+				else
+				{
+					return connected_nodes[0];
+				}
+			}
+			std::cout << "ERROR: node not connected to this joint." << std::endl;
+			if(this->is_terminal())
+			{
+				std::cout << "ERROR-CTD: Actually, this is a terminal node. This error should not have been triggered" << std::endl;
+			}
+			return nullptr;
+		}
+
+
 		std::string to_string()
 		{
 			// std::string str =  "pos: (" + std::to_string(this->get_pos(this->X)) + ", " + std::to_string(this->get_pos(this->Y)) + ") \tvel: (" + std::to_string(vel.at(this->X)) + ", " + std::to_string(vel.at(this->Y))  + ") \tacc: (" + std::to_string(acc.at(this->X)) + ", " + std::to_string(acc.at(this->Y)) +")" ;
+			// std::string str =  "(" + std::to_string(this->current_pos.at(this->X)) + ", " + std::to_string(this->current_pos.at(this->Y)) + ") \tneutral: " + std::to_string(neutral_angle) + ", angle:" +std::to_string(current_angle) ;
+
 			std:: string str = "pos: " + pos.to_string() + "\t vel: " + vel.to_string() + "\t acc: " + acc.to_string();
 			return str;
 		}
 
-};
-
-class joint:public render_entity
-{
-	public:
-		// moved to parent class
-		// const int X = 0;
-		// const int Y = 1;
-
-		node* node1;
-		node* node2;
-		double neutral_angle = PI; //angle between adjacent nodes
-		double current_angle;
-		vector current_pos;
-		double spring_constant = 20; 
-		double joint_distance = 0; //distance between two bodies. Body to joint "center" is joint_distance/2
-		double dist_tol = 0.05; //meters
-		double angle_tol = 10*PI/180; //meters
-		
-
-		joint(node* node1, node* node2, double neutral_angle, double spring_const)
-		{
-			this->node1 = node1;
-			this->node2 = node2;
-			this->neutral_angle = neutral_angle;
-			this->spring_constant = spring_const;
-			this->joint_distance = hypot(node1->get_pos(node1->X)- node2->get_pos(node2->X), node1->get_pos(node1->Y)- node2->get_pos(node2->Y));
-		}
-
-		double get_pos(int index)
-		{
-			if(index < 2)
-			{
-				return (node1->get_pos(index) + node2->get_pos(index))/2;
-			}
-			else
-			{
-				std::cout << "ERROR: Joint indexing out of bounds for : " << index << std::endl;
-				return -1;
-			}
-
-		}
-
-		vector update_pos()
-		{
-			current_pos = (node1->get_pos()+node2->get_pos())/2;
-			return current_pos;
-		}
-
-		// @TODO: Add angle update function. Maybe at the same time as force prop?
-		std::string to_string()
-		{
-			std::string str =  "(" + std::to_string(this->current_pos.at(this->X)) + ", " + std::to_string(this->current_pos.at(this->Y)) + ") \tneutral: " + std::to_string(neutral_angle) + ", angle:" +std::to_string(current_angle) ;
-		}
-
-		void draw()
-		{
-			int sxn1, syn1, sxn2, syn2, sxj, syj;
-		    glColor3ub(0,0, 255);	
-
-			render_entity::PhysicalCoordToScreenCoord( sxj,  syj,  this->current_pos.at(render_entity::X),  this->current_pos.at(render_entity::Y));
-			render_entity::PhysicalCoordToScreenCoord(sxn1, syn1, node1->get_pos(render_entity::X), node1->get_pos(render_entity::Y));
-			render_entity::PhysicalCoordToScreenCoord(sxn2, syn2, node2->get_pos(render_entity::X), node2->get_pos(render_entity::Y));
-			render_entity::DrawLine(sxj, syj, sxn1, syn1);
-			render_entity::DrawLine(sxj, syj, sxn2, syn2);
-		}
-
-		double joint_dist_sq(node* node)
-		{
-			double joint_x = this->current_pos.at(render_entity::X);
-			double joint_y = this->current_pos.at(render_entity::Y);
-			return ((node->get_pos(render_entity::X)-joint_x)*(node->get_pos(render_entity::X)-joint_x)) + ((node->get_pos(render_entity::Y)-joint_y)*(node->get_pos(render_entity::Y)-joint_y));
-		}
-
-		double joint_dist(node* node)
-		{
-			return sqrt(this->joint_dist_sq(node));
-		}
-		
-		node* get_other(node* input)
-		{
-			if(input==node1 || input == node2)
-			{
-				if(input == node1)
-				{
-					return node2;
-				}
-				else
-				{
-					return node1;
-				}
-			}
-			std::cout << "ERROR: node not connected to this joint." << std::endl;
-			return nullptr;
-		}
-
-		double update_angle()
-		{
-			double numer = node1->get_pos().dot(node2->get_pos());
-			double denom = node1->get_pos().get_length() * node2->get_pos().get_length();
-			current_angle = acos(numer/denom);
-			return current_angle;
-		}
-
-		// really just updates the angle ahead of time
-		void reset()
-		{
-			update_angle();
-			update_pos();
-		}
-
 		// should attempt to resolve within one timestep. input is the node that was most recently moved.
+		//attempts to move self and other node
 		void enforce_dist_constraint(node* last_node, double dt)
 		{
-			//target distance between two nodes in a joint from law of cosines.
-			node* move_node = this->get_other(last_node);
-			// double cur_angle = this->get_angle(); //moved to reset function
-			double cur_angle = current_angle;
-			double half_joint_dist = (joint_distance/2);
-			double goal_len = sqrt( 2*(half_joint_dist*half_joint_dist)  + (2*half_joint_dist*half_joint_dist*cos(cur_angle)));
-			double cur_len  = sqrt(joint_dist_sq(node1) + joint_dist_sq(node2) + (2*joint_dist(node1)*joint_dist(node2)*cos(cur_angle)));
 
-			if(abs(cur_len-goal_len) > dist_tol)
+			
+			// compare distance from last_node to self, and move self.
+			double last_self_dist_sq = this->dist_sq(last_node);
+			
+			double target_dist_sq = joint_distance*joint_distance;
+			
+			// applied acceleration of current node. used to fix acceration of other node.
+			vector accel_curr_node = vector(0,0);
+			
+			// distance from last_node and current node is outside of tolerance
+			if(abs(last_self_dist_sq-target_dist_sq) > dist_tol)
 			{
-				std::cout << "enforcing distance!" << cur_len-goal_len;
-				vector norm_dist = (move_node->get_pos()-last_node->get_pos()).normalize();
-				vector target_motion = norm_dist*(goal_len-cur_len);
-				std::cout << "\ttarget motion " << target_motion.to_string();
-				std::cout << "\tapplied acc " << (target_motion/(dt*dt)).to_string() << std::endl;
-				// assuming that target_dist/dt^2 = acceleration
-				move_node->add_accel(target_motion/(dt*dt));
+				
+				// direction of motion away from last_node toward current node
+				vector move_dir = (this->get_pos()-last_node->get_pos()).normalize();
+				
+				double move_dist = this->dist(last_node)-joint_distance;
+				
+				vector target_motion = move_dir*(move_dist);
+				
+				accel_curr_node = target_motion/(dt*dt);
+				
+				this->add_accel(accel_curr_node);
+				
 			}
+
+
+			if(!this->is_terminal())
+			{
+				node* other_node = this->get_other(last_node);
+				
+				double self_other_dist_sq = this->dist_sq(other_node);
+				
+				// distance from current node to other_node is outside of tolerance
+				if(abs(self_other_dist_sq-target_dist_sq) > dist_tol)
+				{
+					// direction of motion away from current node toward other_node
+					
+					vector move_dir = (other_node->get_pos()-this->get_pos()).normalize();
+					
+					double move_dist = this->dist(other_node)-joint_distance;
+					
+					vector target_motion = move_dir*(move_dist);
+					
+					vector accel_other = target_motion/(dt*dt);
+					
+					this->add_accel(accel_curr_node+accel_other);
+					
+				
+				}
+			}
+			
+
 		}
 
 		void apply_bending_force(node* last_node)
 		{
-			// cmath uses radians.
-			if(abs(current_angle-neutral_angle) > angle_tol)
+			if(!this->is_terminal())
 			{
+				// std::cout << "\tcurrent angle: " << current_angle << ", target angle: " << neutral_angle << std::endl;
+			
+				// cmath uses radians.
+				if(abs(current_angle-neutral_angle) > angle_tol)
+				{
 
-				node* move_node = this->get_other(last_node);
-				std::cout << "enforcing angle " << std::to_string(current_angle-neutral_angle);
-				vector A = this->current_pos-last_node->get_pos();
-				vector B = move_node->get_pos() -this->current_pos;
-				vector force_dir = B.get_perpen_toward(A); //normalized direction of force
-				std::cout << "\tforce direction " << force_dir.to_string();
-				std::cout << "\tapplied acceleration " << (force_dir*(spring_constant*abs(current_angle-neutral_angle))).to_string() << std::endl;
+					node* move_node = this->get_other(last_node);
+					std::cout << "\tenforcing angle. current difference is " << std::to_string(current_angle-neutral_angle);
+					vector A = this->pos-last_node->get_pos();
+					vector B = move_node->get_pos() -this->pos;
+					vector force_dir = B.get_perpen_toward(A); //normalized direction of force
+					std::cout << "\tforce direction " << force_dir.to_string();
+					std::cout << "\tapplied acceleration " << (force_dir*(spring_constant*abs(current_angle-neutral_angle))).to_string() << std::endl;
 
-				// force = k*theta
-				move_node->add_accel(force_dir*(spring_constant*abs(current_angle-neutral_angle)));
-				
-				
-				//              move_node
-				//                 /
-				//                /   vector B
-				//               /
-				//            joint 
-				//              |
-				//              |    vector A
- 				//              |
-				//          last_node
+					// force = k*theta
+					move_node->add_accel(force_dir*(spring_constant*abs(current_angle-neutral_angle)));
+					
+					
+					//              move_node
+					//                 /
+					//                /   vector B
+					//               /
+					//            this node 
+					//              |
+					//              |    vector A
+					//              |
+					//          last_node
 
+				}
 			}
 		}
 
 		
-};
 
+
+
+};
 
 class line_obstacle: public render_entity
 {
@@ -684,12 +718,11 @@ class line_obstacle: public render_entity
 
 };
 
-class catheter
+class catheter : public render_entity
 {
 	public:
-		std::vector<joint*> joints;
 		std::vector<node*> nodes;
-		int num_nodes, num_joints; //num_nodes = num_joints+1
+		int num_nodes;
 
 		node* base_node;
 
@@ -702,22 +735,29 @@ class catheter
 			double step_y = unit_y*joint_distance;
 
 			num_nodes = num_segments+1;
-			num_joints = num_segments;
 
 			//setting nodes
 			for(int i = 0; i < num_nodes; i++)
 			{
-				node* temp_node = new node(x_origin + (step_x*i), y_origin + (step_y*i), radius);
+				node* temp_node = new node(x_origin + (step_x*i), y_origin + (step_y*i),radius, PI, 5, joint_distance);
 				if(0 == i)
 				{
 					base_node = temp_node;
 					base_node->fix_node();
 				}
 				nodes.push_back(temp_node);
+				
 			}
 
+			//connecting nodes
+			for(int i = 1; i < num_nodes; i++)
+			{
+				nodes[i]->connect_node(nodes[i-1]);
+				
+			}
 
 			//reading nodes
+
 			int count = 0;
 			for(auto iter = nodes.begin(); iter != nodes.end(); iter++)
 			{
@@ -725,22 +765,7 @@ class catheter
 				count++;
 			}
 
-			//setting joints
-			for(int i = 0; i < num_nodes-1 ; i++)
-			{
-				joint* temp_joint = new joint(nodes[i], nodes[i+1], 0, 5) ;
-				joints.push_back(temp_joint);
-			}
-
-			// reading joints
-			count = 0;
-			for(auto iter = joints.begin(); iter !=joints.end(); iter++)
-			{
-				std::cout << "joint " << count << ": (" << (*iter)->get_pos((*iter)->X) << ", " << (*iter)->get_pos((*iter)->Y) << ")" << std::endl;
-				count++;
-			}
-
-			// std::cout << "cath build complete " << std::endl;
+			std::cout << "cath build complete " << std::endl;
 
 		}
 
@@ -753,16 +778,25 @@ class catheter
 		void update(double dt)
 		{
 			
-			for(int i = 0; i < num_joints; i ++)
+			nodes[0]->reset();
+			for(int i = 1; i < num_nodes; i ++)
 			{
 				nodes[i]->reset();
-				joints[i]->reset();
 
-				joints[i]->enforce_dist_constraint(nodes[i],dt);
+				
+				std::cout << "enforcing distance constraint for joint " <<  std::to_string(i) << "....";
+				nodes[i]->enforce_dist_constraint(nodes[i-1],dt);
+				std::cout << "done" << std::endl;
 				// std::cout << "distance constraint enforced. " <<  std::to_string(i) << std::endl;
-				joints[i]->apply_bending_force(nodes[i]);
-				std::cout << "node " + std::to_string(i) + ": " + nodes[i+1]->to_string() << std::endl;
-				nodes[i+1]->move(dt);
+				
+				std::cout << "bending force for joint " <<  std::to_string(i) << "...." <<std::endl;
+				nodes[i]->apply_bending_force(nodes[i-1]);
+				std::cout << "\tdone" << std::endl;
+
+				std::cout << "node " + std::to_string(i)<< std::endl;
+				
+				
+				nodes[i]->move(dt);				
 			}
 			nodes[num_nodes-1]->reset();
 			std::cout << "---------------------------------" << std::endl;
@@ -771,16 +805,17 @@ class catheter
 
 		void draw()
 		{
-
-			//drawing joints
-			for(int i = 0; i < num_joints; i++)
+			// draw node connections
+			int n1x, n1y, n2x, n2y;
+			glColor3ub(0,0, 255);	
+			for(int i = 0; i < num_nodes-1; i++)
 			{
-				// std::cout << "Drawing joint " << i << std::endl;
-				joints[i]->draw();
+				render_entity::PhysicalCoordToScreenCoord(n1x, n1y, nodes[i]->get_pos(render_entity::X),   nodes[i]->get_pos(render_entity::Y));
+				render_entity::PhysicalCoordToScreenCoord(n2x, n2y, nodes[i+1]->get_pos(render_entity::X), nodes[i+1]->get_pos(render_entity::Y));
+				render_entity::DrawLine(n1x, n1y, n2x, n2y);
 			}
-			
-			// std::cout << "All joints drawn" << std::endl;
 
+			// draw nodes
 			for(int i = 0; i < num_nodes; i++)
 			{
 				// std::cout << "Drawing node " << i << std::endl;
@@ -822,18 +857,17 @@ int main()
 
 
 
-	std::cout << "attempting to open window..." ;
+	std::cout << "opening window..." << std::endl;
 	FsOpenWindow(16,16,800,600,1);
-	std::cout << "complete" << std::endl;
 
 
 	int key;
 
-	line_obstacle line = line_obstacle(5,7,10,5);
-	double norm_vec[2];
-	line.get_normal(norm_vec);
-	std::cout << "the normal of (" << line.pos[0] << ", " << line.pos[1] << "), (" << line.pos[2] << ", " << line.pos[3] << ")";
-	std::cout << "is (" << norm_vec[0] << ", " << norm_vec[1] << ")" << std::endl;
+	// line_obstacle line = line_obstacle(5,7,10,5);
+	// double norm_vec[2];
+	// line.get_normal(norm_vec);
+	// std::cout << "the normal of (" << line.pos[0] << ", " << line.pos[1] << "), (" << line.pos[2] << ", " << line.pos[3] << ")";
+	// std::cout << "is (" << norm_vec[0] << ", " << norm_vec[1] << ")" << std::endl;
 
 
 	double mv_vel = 0.5;
@@ -863,7 +897,6 @@ int main()
 
 		glClear(GL_DEPTH_BUFFER_BIT|GL_COLOR_BUFFER_BIT);
 		cath.draw();
-		line.draw();
         FsSwapBuffers();
         FsSleep(25);
 	}
