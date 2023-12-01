@@ -60,9 +60,9 @@ class vector
 		vector get_perpen_toward(vector target)
 		{
 			vector perpendicular = vector(-vec[1], vec[0]);
-			if(target.dot(perpendicular) < 0) //obtuse angle, facing toward target
+			if(target.dot(perpendicular) > 0) //obtuse angle, facing toward target
 			{
-				return perpendicular;
+				return perpendicular.normalize();
 			}
 			perpendicular = vector(vec[1], -vec[0]);
 			return perpendicular.normalize();
@@ -351,7 +351,7 @@ class node: public render_entity
 		double spring_constant = 20; 
 		double joint_distance = 0; //distance between two bodies. Body to joint "center" is joint_distance/2
 		double dist_tol = 0.05; //meters
-		double angle_tol = 10*PI/180; //meters
+		double angle_tol = 2*PI/180; //meters
 
 		vector pos;
 		vector vel = vector(0,0);
@@ -636,12 +636,12 @@ class node: public render_entity
 				{
 
 					node* move_node = this->get_other(last_node);
-					std::cout << "\tenforcing angle. current difference is " << std::to_string(current_angle-neutral_angle);
+					// std::cout << "\tenforcing angle. current difference is " << std::to_string(current_angle-neutral_angle);
 					vector A = this->pos-last_node->get_pos();
 					vector B = move_node->get_pos() -this->pos;
 					vector force_dir = B.get_perpen_toward(A); //normalized direction of force
-					std::cout << "\tforce direction " << force_dir.to_string();
-					std::cout << "\tapplied acceleration " << (force_dir*(spring_constant*abs(current_angle-neutral_angle))).to_string() << std::endl;
+					// std::cout << "\tforce direction " << force_dir.to_string();
+					// std::cout << "\tapplied acceleration " << (force_dir*(spring_constant*abs(current_angle-neutral_angle))).to_string() << std::endl;
 
 					// force = k*theta
 					move_node->add_accel(force_dir*(spring_constant*abs(current_angle-neutral_angle)));
@@ -723,11 +723,11 @@ class catheter : public render_entity
 			double step_y = unit_y*joint_distance;
 
 			num_nodes = num_segments+1;
-
+			double spring_const = 700;
 			//setting nodes
 			for(int i = 0; i < num_nodes; i++)
 			{
-				node* temp_node = new node(x_origin + (step_x*i), y_origin + (step_y*i),radius, PI, 5, joint_distance);
+				node* temp_node = new node(x_origin + (step_x*i), y_origin + (step_y*i),radius, PI, spring_const, joint_distance);
 				if(0 == i)
 				{
 					base_node = temp_node;
@@ -782,16 +782,16 @@ class catheter : public render_entity
 				// std::cout << "distance constraint enforced. " <<  std::to_string(i) << std::endl;
 				
 				// std::cout << "bending force for joint " <<  std::to_string(i) << "...." <<std::endl;
-				// nodes[i]->apply_bending_force(nodes[i-1]);
+				nodes[i]->apply_bending_force(nodes[i-1]);
 				// std::cout << "\tdone" << std::endl;
 
-				std::cout << "node " << std::to_string(i)<< " pushing node  " << std::to_string(i+1) << ": " << nodes[i+1]->to_string() << std::endl;
+				// std::cout << "node " << std::to_string(i)<< " pushing node  " << std::to_string(i+1) << ": " << nodes[i+1]->to_string() << std::endl;
 
 				
 				nodes[i+1]->move(dt);				
 			}
 			nodes[num_nodes-1]->reset();
-			std::cout << "---------------------------------" << std::endl;
+			// std::cout << "---------------------------------" << std::endl;
 
 		}
 
