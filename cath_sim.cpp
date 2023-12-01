@@ -582,20 +582,21 @@ class node: public render_entity
 		void enforce_dist_constraint(node* last_node, double dt)
 		{
 
-
 			// no orphan nodes
 			if(connected_nodes.size() !=0)
 			{
 				node* other_node;
+				// used on proximal end
 				if(last_node == nullptr)
 				{
 					other_node = this->connected_nodes[0];
 				}
+				// middle nodes
 				else
 				{
 					other_node = this->get_other(last_node);
 				}
-				std::cout << "Other Node " << other_node->to_string() << std::endl;
+				// std::cout << "Other Node " << other_node->to_string() << std::endl;
 				double dist_sq = this->dist_sq(other_node);
 				double target_dist_sq = joint_distance*joint_distance;
 
@@ -608,142 +609,16 @@ class node: public render_entity
 					vector target_motion = move_dir*(move_dist);
 					vector accel_curr_node = target_motion/(dt*dt);
 					other_node->add_accel(accel_curr_node);
-					std::cout << "Added acceleration: " << accel_curr_node.to_string() << std::endl;
+					// std::cout << "Added acceleration: " << accel_curr_node.to_string() << std::endl;
 
 				}
 
 			}
+			else
+			{
+				std::cout << "WARNING: Orphan node detected: " << this->to_string() << std::endl;
+			}
 
-
-
-			// // starting node
-			// if(last_node == nullptr && connected_nodes.size()!=0)
-			// {
-			// 	// node being moved by current node
-			// 	node* other_node = this->connected_nodes[0];
-			// 	std::cout << "Other Node " << other_node->to_string() << std::endl;
-			// 	double dist_sq = this->dist_sq(other_node);
-			// 	double target_dist_sq = joint_distance*joint_distance;
-
-			// 	// if the distance is greater than the target distance
-			// 	if(abs(dist_sq-target_dist_sq) > dist_tol)
-			// 	{
-			// 		// direction of motion away from last_node toward current node
-			// 		vector move_dir = (other_node->get_pos()- this->get_pos()).normalize();
-			// 		double move_dist = joint_distance-this->dist(other_node);
-			// 		vector target_motion = move_dir*(move_dist);
-			// 		vector accel_curr_node = target_motion/(dt*dt);
-			// 		other_node->add_accel(accel_curr_node);
-			// 		std::cout << "Added acceleration: " << accel_curr_node.to_string() << std::endl;
-
-			// 	}
-
-			// }
-			// else if(last_node != nullptr && connected_nodes.size()!=0)
-			// {
-			// 	// node being moved by current node
-			// 	node* other_node = this->get_other(last_node); //Changed!
-			// 	std::cout << "Other Node " << other_node->to_string() << std::endl;
-			// 	double dist_sq = this->dist_sq(other_node);
-			// 	double target_dist_sq = joint_distance*joint_distance;
-
-			// 	// if the distance is greater than the target distance
-			// 	if(abs(dist_sq-target_dist_sq) > dist_tol)
-			// 	{
-			// 		// direction of motion away from last_node toward current node
-			// 		vector move_dir = (other_node->get_pos()- this->get_pos()).normalize();
-			// 		double move_dist = joint_distance-this->dist(other_node);
-			// 		vector target_motion = move_dir*(move_dist);
-			// 		vector accel_curr_node = target_motion/(dt*dt);
-			// 		other_node->add_accel(accel_curr_node);
-			// 		std::cout << "Added acceleration: " << accel_curr_node.to_string() << std::endl;
-
-			// 	}
-
-			// }
-
-
-			// else
-			// {
-			// 	// node being moved by current node
-			// 	node* other_node = this->get_other(last_node);
-			// 	std::cout << "Other Node " << other_node->to_string() << std::endl;
-			// 	double dist_sq = this->dist_sq(other_node);
-			// 	double target_dist_sq = joint_distance*joint_distance;
-
-			// 	// if the distance is greater than the target distance
-			// 	if(abs(dist_sq-target_dist_sq) > target_dist_sq)
-			// 	{
-			// 		// direction of motion away from last_node toward current node
-			// 		vector move_dir = (other_node->get_pos()- this->get_pos()).normalize();
-					
-			// 		double move_dist = joint_distance-this->dist(last_node);
-					
-			// 		vector target_motion = move_dir*(move_dist);
-					
-			// 		vector accel_curr_node = target_motion/(dt*dt);
-					
-			// 		other_node->add_accel(accel_curr_node);
-			// 		std::cout << "Added acceleration: " << accel_curr_node.to_string() << std::endl;
-
-			// 	}
-
-			
-			// // moves next based on last_node
-			// if(last_node!=nullptr)
-			// {
-			// 	// compare distance from last_node to self, and move self.
-			// 	double last_self_dist_sq = this->dist_sq(last_node);
-				
-			// 	double target_dist_sq = joint_distance*joint_distance;
-				
-			// 	// applied acceleration of current node. used to fix acceration of other node.
-			// 	vector accel_curr_node = vector(0,0);
-				
-			// 	// this is probably redundant, so removed for now.
-
-			// 	// distance from last_node and current node is outside of tolerance
-			// 	if(abs(last_self_dist_sq-target_dist_sq) > dist_tol)
-			// 	{
-					
-			// 		// direction of motion away from last_node toward current node
-			// 		vector move_dir = (this->get_pos()-last_node->get_pos()).normalize();
-					
-			// 		double move_dist = joint_distance-this->dist(last_node);
-					
-			// 		vector target_motion = move_dir*(move_dist);
-					
-			// 		accel_curr_node = target_motion/(dt*dt);
-					
-			// 		this->add_accel(accel_curr_node);
-					
-			// 	}
-				
-
-				// if(true)
-				// {
-				// 	node* other_node = this->get_other(last_node);
-					
-				// 	double self_other_dist_sq = this->dist_sq(other_node);
-					
-				// 	// distance from current node to other_node is outside of tolerance
-				// 	if(abs(self_other_dist_sq-target_dist_sq) > dist_tol)
-				// 	{
-				// 		// direction of motion away from current node toward other_node
-				// 		std::cout << "\tDistance difference: " << self_other_dist_sq-target_dist_sq << "tolerance: " <<dist_tol << std::endl;
-				// 		vector move_dir = (other_node->get_pos()-this->get_pos()).normalize();
-						
-				// 		double move_dist = joint_distance-this->dist(other_node);
-						
-				// 		vector target_motion = move_dir*(move_dist);
-						
-				// 		vector accel_other = target_motion/(dt*dt);
-				// 		std::cout << "applied acceleration " << accel_other.to_string() << std::endl;
-				// 		other_node->add_accel(accel_other); //used to include accel_curr_node
-						
-					
-				// 	}
-				// }
 		}
 
 				
@@ -757,7 +632,7 @@ class node: public render_entity
 				// std::cout << "\tcurrent angle: " << current_angle << ", target angle: " << neutral_angle << std::endl;
 			
 				// cmath uses radians.
-				if(abs(current_angle-neutral_angle) > angle_tol)
+				if(abs(current_angle-neutral_angle) > angle_tol) //current_angle should have been updated in the reset function
 				{
 
 					node* move_node = this->get_other(last_node);
@@ -894,22 +769,23 @@ class catheter : public render_entity
 			nodes[0]->reset();
 			nodes[0]->enforce_dist_constraint(nullptr,dt);
 			nodes[1]->move(dt);
-			// nodes[1]->reset();
+
+			// iterates through all nonterminal nodes
 			for(int i = 1; i < num_nodes-1; i ++)
 			{
 				nodes[i]->reset();
 
 				
-				std::cout << "enforcing distance constraint for node " <<  std::to_string(i) << "....";
+				// std::cout << "enforcing distance constraint for node " <<  std::to_string(i) << "....";
 				nodes[i]->enforce_dist_constraint(nodes[i-1],dt);
-				std::cout << "done" << std::endl;
+				// std::cout << "done" << std::endl;
 				// std::cout << "distance constraint enforced. " <<  std::to_string(i) << std::endl;
 				
 				// std::cout << "bending force for joint " <<  std::to_string(i) << "...." <<std::endl;
 				// nodes[i]->apply_bending_force(nodes[i-1]);
 				// std::cout << "\tdone" << std::endl;
 
-				std::cout << "node " + std::to_string(i)<< std::endl;
+				std::cout << "node " << std::to_string(i)<< " pushing node  " << std::to_string(i+1) << ": " << nodes[i+1]->to_string() << std::endl;
 
 				
 				nodes[i+1]->move(dt);				
