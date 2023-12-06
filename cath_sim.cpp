@@ -15,6 +15,8 @@
 #define PI 3.14159265
 class node;
 class joint;
+class collision_detector;
+class catheter;
 
 class vector
 {
@@ -126,15 +128,16 @@ class vector
 			return ret_vec;
 		}
 
-		//returns a vector where input component (eg. wall normal) is removed from this vector (eg velocity)
+		//returns a vector where input component (eg. wall NOT-normal) is removed from this vector (eg velocity)
 		vector remove_component(vector input_vec)
 		{
 			// normalize input
 			vector input_norm = input_vec.normalize();
 
 		    // Compute the projection of velocity onto the wall normal
-			vector projection = input_norm*(this->dot(input_norm));
+			vector projection = input_norm*(this->dot(input_vec));
 
+			return projection;
 			// to complete
 			vector ret_vec = (*this)-projection;
 
@@ -238,8 +241,6 @@ class vector
 				}
 			return true;
 		}
-
-		
 
 };
 
@@ -425,7 +426,11 @@ class node: public render_entity
 		{
 			return acc.at(index);
 		}
-
+		
+		vector get_acc()
+		{
+			return acc;
+		}
 		double get_rad()
 		{
 			return this->radius;
@@ -607,8 +612,8 @@ class node: public render_entity
 					vector move_dir = (other_node->get_pos()- this->get_pos()).normalize();
 					double move_dist = joint_distance-this->dist(other_node);
 					vector target_motion = move_dir*(move_dist);
-					vector accel_curr_node = target_motion/(dt*dt);
-					other_node->add_accel(accel_curr_node);
+					vector accel = target_motion/(dt*dt);
+					other_node->add_accel(accel);
 					// std::cout << "Added acceleration: " << accel_curr_node.to_string() << std::endl;
 
 				}
@@ -620,11 +625,8 @@ class node: public render_entity
 			}
 
 		}
-
-				
-
-		
-
+	
+		// accelerates node that is not last_node based on angle formed by three nodes
 		void apply_bending_force(node* last_node)
 		{
 			if(!this->is_terminal())
@@ -645,7 +647,7 @@ class node: public render_entity
 
 					// force = k*theta
 					move_node->add_accel(force_dir*(spring_constant*abs(current_angle-neutral_angle)));
-					
+					// std::cout << "bending acceleration: " << move_node->get_acc().to_string() << std::endl;
 					
 					//              move_node
 					//                 /
@@ -661,9 +663,10 @@ class node: public render_entity
 			}
 		}
 
-		
-
-
+		void apply_constraint(vector obstacle)
+		{
+			acc.remove_component(obstacle); //propegates to velocity
+		}
 
 };
 
@@ -704,18 +707,106 @@ class line_obstacle: public render_entity
 			render_entity::DrawLine(x1, y1, x2, y2);
 		}
 
+		double get_x_left()
+		{
+			return std::min(pos[0], pos[2]);
+		}
+		double get_x_right()
+		{
+			return std::max(pos[0], pos[2]);
+		}
+		double get_y_bot()
+		{
+			return std::min(pos[1], pos[3]);
+		}
+		double get_y_top()
+		{
+			return std::max(pos[1], pos[3]);
+		}
+
+		vector get_vec()
+		{
+			vector ret_vec = vector(pos[0]-pos[3], pos[1]-pos[4]);
+			return ret_vec;
+		}
 };
+
+
+class collision_detector
+{
+	public: 
+		std::vector<line_obstacle*> obstacles;
+
+		collision_detector()
+		{
+
+		}
+
+		collision_detector( std::vector<line_obstacle*> obstacles)
+		{
+			// this->cath = cath;
+			this->obstacles = obstacles;
+		}
+
+		
+		// returns index of obstacle connecting with node. If no collision, returns -1 
+		int check_collision(node* nd)
+		{
+			int ind = 0;
+			for(auto iter = obstacles.begin(); iter != obstacles.end(); iter++)
+			{
+				if( coarse_overlap(nd, *(*iter)))
+				{
+					std::cout << "overlap detected!: (" << nd->get_pos(0) << ", " << nd->get_pos(1) << ") and line (" << (*iter)->pos[0] << ", " <<  (*iter)->pos[1] << ") -> (" << (*iter)->pos[2] << ", " <<  (*iter)->pos[3] << ")" << std::endl; 
+					return ind;
+				};
+				ind++;
+			}
+			return -1;
+
+		}
+
+		// returns a vector re
+		vector get_constraint_vec(int index)
+		{
+			return obstacles[index]->get_vec();	
+		}
+
+		
+	private:
+		bool coarse_overlap(node* nd, line_obstacle obstacle)
+		{
+			double nd_x_l = nd->get_pos().at(0) - nd->get_rad()/2;
+			double nd_x_r = nd->get_pos().at(0) + nd->get_rad()/2;
+			double nd_y_b = nd->get_pos().at(1) - nd->get_rad()/2;
+			double nd_y_t = nd->get_pos().at(1) + nd->get_rad()/2;
+
+			// AABB bounding box
+			if(nd_x_l<obstacle.get_x_right() &&
+				nd_x_r>obstacle.get_x_left() &&
+				nd_y_b<obstacle.get_y_top() &&
+				nd_y_t>obstacle.get_y_bot())
+			{
+				return true;
+			}
+			return false;
+
+		}
+};
+
 
 class catheter : public render_entity
 {
 	public:
 		std::vector<node*> nodes;
 		int num_nodes;
+		collision_detector det;
 
 		node* base_node;
 
-		void build_cath(double x_origin, double y_origin, double x_dir, double y_dir, double joint_distance, int num_segments, double radius)
+		catheter(double x_origin, double y_origin, double x_dir, double y_dir, double joint_distance, int num_segments, double radius, double spring_const, collision_detector detector)
 		{
+			this->det = detector;
 			double unit_x = x_dir/hypot(x_dir, y_dir);
 			double unit_y = y_dir/hypot(x_dir, y_dir);
 
@@ -723,7 +814,7 @@ class catheter : public render_entity
 			double step_y = unit_y*joint_distance;
 
 			num_nodes = num_segments+1;
-			double spring_const = 700;
+			// double spring_const = 700;
 			//setting nodes
 			for(int i = 0; i < num_nodes; i++)
 			{
@@ -760,12 +851,39 @@ class catheter : public render_entity
 
 		void move_input(double x, double y)
 		{
-			base_node->move_rel_pos(x,y);
+				double x_constrained = x;
+				double y_constrained = y;
+				
+				int col_ind = det.check_collision(base_node);
+				if(-1 != col_ind)
+				{
+					// this is the direction of the wall, not the normal
+					vector constraint = det.get_constraint_vec(col_ind);
+					// constraint = constraint.get_perpen_toward()
+					vector motion = vector(x_constrained,y_constrained);
+
+					vector new_motion = constraint.normalize()*(constraint.dot(motion));
+
+
+
+					std::cout << "Input Motion: " << motion.to_string();
+					// motion = motion.remove_component(constraint);
+					std::cout << "new motion: " << new_motion.to_string() <<std::endl;
+					base_node->move_rel_pos(new_motion);
+					// std::cout << "\t old acc: " << nodes[i+1]->acc.to_string() << " new acc:  ";
+					// base_node->apply_constraint(det.get_constraint_vec(col_ind));
+					// std::cout << nodes[i+1]->acc.to_string()  << std::endl;
+				}
+				else
+				{
+					base_node->move_rel_pos(x_constrained,y_constrained);
+				}
 		}
 
 		void update(double dt)
 		{
-			
+			int col_ind = -1;
+
 			nodes[0]->reset();
 			nodes[0]->enforce_dist_constraint(nullptr,dt);
 			nodes[1]->move(dt);
@@ -786,14 +904,35 @@ class catheter : public render_entity
 				// std::cout << "\tdone" << std::endl;
 
 				// std::cout << "node " << std::to_string(i)<< " pushing node  " << std::to_string(i+1) << ": " << nodes[i+1]->to_string() << std::endl;
+				// std::cout << "Acceleration after adding bending and constraints: " << nodes[i]->get_acc().to_string() << std::endl;
+				col_ind = det.check_collision(nodes[i+1]);
+				if(-1 != col_ind)
+				{
+					// std::cout << "\t old acc: " << nodes[i+1]->acc.to_string() << " new acc:  ";
+					nodes[i+1]->apply_constraint(det.get_constraint_vec(col_ind));
+					std::cout << nodes[i+1]->acc.to_string()  << std::endl;
+				}
 
-				
-				nodes[i+1]->move(dt);				
+				nodes[i+1]->move(dt);					
 			}
 			nodes[num_nodes-1]->reset();
 			// std::cout << "---------------------------------" << std::endl;
 
 		}
+
+		~catheter()
+		{
+			delete base_node;
+			base_node = nullptr;
+		}
+
+		void operator=(const catheter& input)
+		{
+			this->nodes = input.nodes;
+			this->num_nodes = input.num_nodes;
+			this->base_node = input.base_node;
+		}
+
 
 		void draw()
 		{
@@ -823,51 +962,42 @@ class catheter : public render_entity
 
 int main()
 {
-	// std::cout <<" hello" << std::endl;
-	// vector test_vec = vector(1,1);
-	// std::cout << "division: " << (test_vec/2).to_string() << std::endl;
-	// std::cout << "multiplication: " << (test_vec*2).to_string() << std::endl;
-	// std::cout << "addition: " << (test_vec+test_vec).to_string() << std::endl;
-	// std::cout << "subtraction: " << (test_vec-test_vec).to_string() << std::endl;
+	vector wall_vec (0.5,0.5);
+	vector motion_up(0,1);
+	vector motion_down(0,-1);
+	vector motion_left(-1,0);
+	vector motion_right(1,0);
+
+	std::cout <<"Should not be able to move up or right." << std::endl;
+	std::cout << "attempted up. Post constrint: " << motion_up.remove_component(wall_vec).to_string() << std::endl;
+	std::cout << "attempted down. Post constrint: " << motion_down.remove_component(wall_vec).to_string() << std::endl;
+	std::cout << "attempted left. Post constrint: " << motion_left.remove_component(wall_vec).to_string() << std::endl;
+	std::cout << "attempted right. Post constrint: " << motion_right.remove_component(wall_vec).to_string() << std::endl;
+
+	
 
 
-		vector A = vector(0,1);
-		vector B = vector(0.7,0.7);
-		double numer = A.dot(B);
-		double denom = A.get_length() * B.get_length();
-		double ang_r = acos(numer/denom);
-		std::cout << "Angle on right: " << std::to_string(A.dot(B));
-		
-		vector C = vector(0.7,-0.7);
-		 numer = A.dot(C);
-		 denom = A.get_length() * B.get_length();
-		double ang_l = acos(numer/denom);
-		std::cout << "Angle on Left" << std::to_string(A.dot(C)) <<std::endl;
+	// add obstacles
+	std::vector<line_obstacle*> obs;
+	line_obstacle* line = new line_obstacle(5,7,10,5);
+	obs.push_back(line);
 
-	catheter cath; 
-	cath.build_cath(1,1,0,1,1.5,3,0.25);
+	collision_detector cd = collision_detector(obs);
 
-
+	catheter cath(1,1,0,1,1.5,2,0.25, 50, cd);
 
 	std::cout << "opening window..." << std::endl;
 	FsOpenWindow(16,16,800,600,1);
 
-
 	int key;
 
-	// line_obstacle line = line_obstacle(5,7,10,5);
-	// double norm_vec[2];
-	// line.get_normal(norm_vec);
-	// std::cout << "the normal of (" << line.pos[0] << ", " << line.pos[1] << "), (" << line.pos[2] << ", " << line.pos[3] << ")";
-	// std::cout << "is (" << norm_vec[0] << ", " << norm_vec[1] << ")" << std::endl;
-
+	
 
 	double mv_vel = 0.5;
 	double dt = 0.05;
     while(FSKEY_ESC!=(key=FsInkey()))
     {
 		FsPollDevice();
-		
 		
 		switch(key)
         {
@@ -889,6 +1019,13 @@ int main()
 
 		glClear(GL_DEPTH_BUFFER_BIT|GL_COLOR_BUFFER_BIT);
 		cath.draw();
+
+		// draw obstacles
+		for (auto iter = obs.begin(); iter != obs.end(); iter++)
+		{
+			(*iter)->draw();
+		}
+		
         FsSwapBuffers();
         FsSleep(25);
 	}
