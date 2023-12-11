@@ -684,12 +684,18 @@ class line_obstacle: public render_entity
 	public:
 		double pos[4];
 
+
 		line_obstacle(double x1, double y1, double x2, double y2)
 		{
 			pos[0] = x1;
 			pos[1] = y1; 
 			pos[2] = x2;
 			pos[3] = y2;
+		}
+
+		 line_obstacle(const line_obstacle &input)
+		{
+			copy(input);
 		}
 
 		// // @TODO: get siddedness.
@@ -751,6 +757,20 @@ class line_obstacle: public render_entity
 			y = pos[3];
 		}
 
+		void operator=(const line_obstacle &input)
+		{
+			copy(input);
+		}
+		
+		private:
+			void copy(const line_obstacle &input)
+			{
+				this->pos[0] = input.pos[0];
+				this->pos[1] = input.pos[1];
+				this->pos[2] = input.pos[2];
+				this->pos[3] = input.pos[3];
+			}
+
 
 };
 
@@ -803,7 +823,7 @@ class sdf2D
 			}
 		}
 
-		sdf2D(std::vector<line_obstacle*> obstacles,int window_width,int window_height, double resolution)
+		sdf2D(std::vector<line_obstacle> obstacles,int window_width,int window_height, double resolution)
 		{
 			this_id = id;
 			id++;
@@ -834,7 +854,7 @@ class sdf2D
 			// }
 
 
-			// fill_sdf(obstacles);
+			fill_sdf(obstacles);
 
 			// // print all values in sdf
 			// for(int i = 0; i < sdf_width; i++)
@@ -852,13 +872,13 @@ class sdf2D
 			std::cout << "SDF complete." << std::endl;
 		}
 
-		void fill_sdf(std::vector<line_obstacle*> obstacles)
+		void fill_sdf(std::vector<line_obstacle> obstacles)
 		{
 			// staging locations to be evaluated
 			std::vector<std::tuple<int, int>> queue;
 
 			// adding obstacles to sdf
-			for(line_obstacle* obs : obstacles)
+			for(line_obstacle obs : obstacles)
 			{
 				std::vector<std::tuple<int, int>> temp_pixels = line_to_pixels(obs);
 
@@ -882,14 +902,14 @@ class sdf2D
 			}
 		}
 
-		std::vector<std::tuple<int, int>>  line_to_pixels(line_obstacle* obs)
+		std::vector<std::tuple<int, int>>  line_to_pixels(line_obstacle obs)
 		{
 
 			// @TODO: Add check to see if the line is within the window
 			std::vector<std::tuple<int, int>> points;
 			double x1, y1, x2, y2, dx, dy;
-			obs->get_p1(x1, y1);
-			obs->get_p2(x2, y2);
+			obs.get_p1(x1, y1);
+			obs.get_p2(x2, y2);
 
 			dx = x2-x1;
 			dy = y2-y1;
@@ -953,7 +973,7 @@ class sdf2D
 
 		~sdf2D()
 		{
-			std::cout << "calling from destructor" << std::endl;
+			// std::cout << "calling from destructor" << std::endl;
 			reset();
 		}
 
@@ -985,7 +1005,7 @@ class sdf2D
 class collision_detector
 {
 	public: 
-		std::vector<line_obstacle*> obstacles;
+		std::vector<line_obstacle> obstacles;
 		sdf2D dist_field;
 
 		collision_detector()
@@ -994,7 +1014,7 @@ class collision_detector
 		}
 
 		// resolution is the number of units per pixel. Assumed to be meters
-		collision_detector( std::vector<line_obstacle*> obstacles,int window_width,int window_height, double resolution)
+		collision_detector( std::vector<line_obstacle> obstacles,int window_width,int window_height, double resolution)
 		{
 			this->obstacles = obstacles;
 			dist_field = sdf2D(obstacles, window_height, window_height, resolution);
@@ -1013,9 +1033,9 @@ class collision_detector
 			int ind = 0;
 			for(auto iter = obstacles.begin(); iter != obstacles.end(); iter++)
 			{
-				if( coarse_overlap(nd, *(*iter)))
+				if( coarse_overlap(nd, (*iter)))
 				{
-					std::cout << "overlap detected!: (" << nd->get_pos(0) << ", " << nd->get_pos(1) << ") and line (" << (*iter)->pos[0] << ", " <<  (*iter)->pos[1] << ") -> (" << (*iter)->pos[2] << ", " <<  (*iter)->pos[3] << ")" << std::endl; 
+					std::cout << "overlap detected!: (" << nd->get_pos(0) << ", " << nd->get_pos(1) << ") and line (" << (*iter).pos[0] << ", " <<  (*iter).pos[1] << ") -> (" << (*iter).pos[2] << ", " <<  (*iter).pos[3] << ")" << std::endl; 
 					return ind;
 				};
 				ind++;
@@ -1027,7 +1047,7 @@ class collision_detector
 		// returns a vector re
 		vector get_constraint_vec(int index)
 		{
-			return obstacles[index]->get_vec();	
+			return obstacles[index].get_vec();	
 		}
 
 		void render_sdf()
@@ -1035,13 +1055,13 @@ class collision_detector
 			dist_field.render();
 		}
 
-		~collision_detector()
-		{
-			for(int i = 0; i < obstacles.size(); i++)
-			{
-				delete obstacles[i];
-			}
-		}
+		// ~collision_detector()
+		// {
+		// 	for(int i = 0; i < obstacles.size(); i++)
+		// 	{
+		// 		delete obstacles[i];
+		// 	}
+		// }
 
 
 	private:
@@ -1258,8 +1278,8 @@ int main()
 	int window_height = 600;
 
 	// add obstacles
-	std::vector<line_obstacle*> obs;
-	line_obstacle* line = new line_obstacle(5,7,10,7);
+	std::vector<line_obstacle> obs;
+	line_obstacle line = line_obstacle(5,7,10,7);
 	obs.push_back(line);
 
 	collision_detector cd(obs, window_width,window_height, 0.25);
@@ -1270,7 +1290,7 @@ int main()
 
 
 	std::cout << "opening window..." << std::endl;
-	FsOpenWindow(16,16,window_width,window_height,1);
+	FsOpenWindow(16,16,window_width,window_height,1, "Catheter Simulation");
 	int key;
 
 	
@@ -1321,7 +1341,7 @@ int main()
 			// draw obstacles
 			for (auto iter = obs.begin(); iter != obs.end(); iter++)
 			{
-				(*iter)->draw();
+				(*iter).draw();
 			}
 		}
 		if(show_sdf)
