@@ -670,6 +670,13 @@ class node: public render_entity
 			acc.remove_component(obstacle); //propegates to velocity
 		}
 
+		~node()
+		{
+			for(int i = 0; i < connected_nodes.size(); i++)
+			{
+				delete connected_nodes[i];
+			}
+		}
 };
 
 class line_obstacle: public render_entity
@@ -767,14 +774,11 @@ class sdf2D
 
 		sdf2D()
 		{
-			std::cout << __LINE__ << std::endl;
-			this_id = id;
-			id++;
+		
 		}
 
 		sdf2D(const sdf2D &incoming)
 		{
-			std::cout << __LINE__ << std::endl;
 			this->copy(incoming);
 		}
 
@@ -789,15 +793,11 @@ class sdf2D
 
 			if(incoming.sdf != nullptr)
 			{
-				std::cout << "size " << this->sdf_width << " " << this->sdf_height << std::endl;
-				std::cout << "Allocating size " << this->sdf_width*this->sdf_height << std::endl;
+				// std::cout << "size " << this->sdf_width << " " << this->sdf_height << std::endl;
+				// std::cout << "Allocating size " << this->sdf_width*this->sdf_height << std::endl;
 				this->sdf = new double[this->sdf_width*this->sdf_height]; // <- problem line!
-				std::cout << (long long int)(this->sdf) << std::endl;
-				// std::fill(sdf, sdf + (this->sdf_width*this->sdf_height), -1);
-			// for(int i = 0; i < sdf_width*sdf_height; i++)
-			// {
-			// 	sdf[i] = input.sdf[i];
-			// }
+				// std::cout << (long long int)(this->sdf) << std::endl;
+
 				std::memcpy(sdf, incoming.sdf, sizeof(double) * sdf_width * sdf_height);
 
 			}
@@ -961,8 +961,8 @@ class sdf2D
 		{
 			if(nullptr != sdf)
 			{
-				std::cout << "deallocating size " << this->sdf_width*this->sdf_height << std::endl;
-				std::cout << (long long int)(this->sdf) << std::endl;
+				// std::cout << "deallocating size " << this->sdf_width*this->sdf_height << std::endl;
+				// std::cout << (long long int)(this->sdf) << std::endl;
 				delete[] this->sdf;
 				this->sdf = nullptr;
 			}
@@ -970,38 +970,10 @@ class sdf2D
 
 		void operator=(const sdf2D& input)
 		{
-			std::cout << "assigning from " << this_id << " to " << id++ <<std::endl;
-			this->this_id = id;
+			// std::cout << "assigning from " << this_id << " to " << id++ <<std::endl;
+			// this->this_id = id;
 			this->copy(input);
-
-			// this->sdf_height = input.sdf_height;
-			// this->sdf_width = input.sdf_width;
-			// this->window_height = input.window_height;
-			// this->window_width = input.window_width;
-			// this->resolution = input.resolution;
-			// this->reset();
-			
-			// if(input.sdf != nullptr)
-			// {
-			// 	std::cout << "size " << this->sdf_width << " " << this->sdf_height << std::endl;
-			// 	std::cout << "Allocating size " << this->sdf_width*this->sdf_height << std::endl;
-			// 	this->sdf = new double[this->sdf_width*this->sdf_height]; // <- problem line!
-			// 	std::cout << (long long int)(this->sdf) << std::endl;
-			// 	// std::fill(sdf, sdf + (this->sdf_width*this->sdf_height), -1);
-			// // for(int i = 0; i < sdf_width*sdf_height; i++)
-			// // {
-			// // 	sdf[i] = input.sdf[i];
-			// // }
-			// 	// std::memcpy(sdf, input.sdf, sizeof(double) * sdf_width * sdf_height);
-
-			// }
-			// else
-			// {
-			// 	std::cout << __LINE__ <<std::endl;
-			// 	this->sdf = nullptr;
-			// }
 		
-			
 
 		}
 
@@ -1026,7 +998,6 @@ class collision_detector
 		{
 			this->obstacles = obstacles;
 			dist_field = sdf2D(obstacles, window_height, window_height, resolution);
-
 			
 		}
 
@@ -1064,6 +1035,14 @@ class collision_detector
 			dist_field.render();
 		}
 
+		~collision_detector()
+		{
+			for(int i = 0; i < obstacles.size(); i++)
+			{
+				delete obstacles[i];
+			}
+		}
+
 
 	private:
 		bool coarse_overlap(node* nd, line_obstacle obstacle)
@@ -1098,7 +1077,6 @@ class catheter : public render_entity
 
 		catheter(double x_origin, double y_origin, double x_dir, double y_dir, double joint_distance, int num_segments, double radius, double spring_const, collision_detector detector)
 		{
-			std::cout << __LINE__ << std::endl;
 
 			this->det = detector;
 			double unit_x = x_dir/hypot(x_dir, y_dir);
@@ -1218,8 +1196,12 @@ class catheter : public render_entity
 
 		~catheter()
 		{
-			delete base_node;
+			// delete base_node;
 			base_node = nullptr;
+			for(int i = 0; i < nodes.size(); i++)
+			{
+				delete nodes[i];
+			}
 		}
 
 		void operator=(const catheter& input)
@@ -1282,11 +1264,10 @@ int main()
 
 	collision_detector cd(obs, window_width,window_height, 0.25);
 
-	std::cout << "1 " << (long long int )(cd.dist_field.sdf) << std::endl;
+	// std::cout << "1 " << (long long int )(cd.dist_field.sdf) << std::endl;
 
 	catheter cath(1,1,0,1,1.5,2,0.25, 50, cd);
 
-	std::cout << __LINE__ << std::endl;
 
 	std::cout << "opening window..." << std::endl;
 	FsOpenWindow(16,16,window_width,window_height,1);
@@ -1352,7 +1333,6 @@ int main()
         FsSleep(25);
 	}
 
-	std::cout << __LINE__ << std::endl;
 
 	return 0;
 }
