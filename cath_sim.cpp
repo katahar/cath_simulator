@@ -751,6 +751,9 @@ class line_obstacle: public render_entity
 class sdf2D
 {
 	public:
+		static int id;
+
+		int this_id;
 		double* sdf = nullptr;
 		
 		// width of the actual window
@@ -764,11 +767,47 @@ class sdf2D
 
 		sdf2D()
 		{
+			std::cout << __LINE__ << std::endl;
+			this_id = id;
+			id++;
+		}
 
+		sdf2D(const sdf2D &incoming)
+		{
+			std::cout << __LINE__ << std::endl;
+			this->copy(incoming);
+		}
+
+		void copy(const sdf2D &incoming)
+		{
+			this->sdf_height = incoming.sdf_height;
+			this->sdf_width = incoming.sdf_width;
+			this->window_height = incoming.window_height;
+			this->window_width = incoming.window_width;
+			this->resolution = incoming.resolution;
+			this->reset();
+
+			if(incoming.sdf != nullptr)
+			{
+				std::cout << "size " << this->sdf_width << " " << this->sdf_height << std::endl;
+				std::cout << "Allocating size " << this->sdf_width*this->sdf_height << std::endl;
+				this->sdf = new double[this->sdf_width*this->sdf_height]; // <- problem line!
+				std::cout << (long long int)(this->sdf) << std::endl;
+				// std::fill(sdf, sdf + (this->sdf_width*this->sdf_height), -1);
+			// for(int i = 0; i < sdf_width*sdf_height; i++)
+			// {
+			// 	sdf[i] = input.sdf[i];
+			// }
+				std::memcpy(sdf, incoming.sdf, sizeof(double) * sdf_width * sdf_height);
+
+			}
 		}
 
 		sdf2D(std::vector<line_obstacle*> obstacles,int window_width,int window_height, double resolution)
 		{
+			this_id = id;
+			id++;
+
 			this->resolution = resolution;
 			this->window_height = window_height;
 			this->window_width = window_width;
@@ -787,34 +826,24 @@ class sdf2D
 			// }
 
 			sdf = new double[sdf_width*sdf_height];
-			for(int i = 0; i < sdf_width*sdf_height; i++)
-			{
-				sdf[i] = -1;
-			}
+			// std::fill(sdf, sdf + (this->sdf_width*this->sdf_height), -1);
 
-			std::cout << __LINE__ << std::endl;
-
-		
-			// // populate with -1
-			// for(int i = 0; i < sdf_width; i++)
+			// for(int i = 0; i < sdf_width*sdf_height; i++)
 			// {
-			// 	for(int j = 0; j < sdf_height; j++)
-			// 	{
-			// 		sdf[i][j] = -1;
-			// 	}
-			// 	// std:: cout << "" << std::endl;
+			// 	sdf[i] = -1;
 			// }
 
-			fill_sdf(obstacles);
+
+			// fill_sdf(obstacles);
 
 			// // print all values in sdf
 			// for(int i = 0; i < sdf_width; i++)
 			// {
 			// 	for(int j = 0; j < sdf_height; j++)
 			// 	{
-			// 		if(sdf[i][j] != -1)
+			// 		if(get_val(i,j) != -1)
 			// 		{
-			// 			std::cout << sdf[i][j] << " " ;
+			// 			std::cout << get_val(i, j) << " " ;
 			// 		}
 			// 	}
 			// 	// std:: cout << "" << std::endl;
@@ -837,7 +866,7 @@ class sdf2D
 				for(std::tuple<int, int> pixel: temp_pixels)
 				{
 					// update sdf as 0 distance to obstacle
-					// sdf[std::get<0>(pixel)][std::get<1>(pixel)] = 0;
+					set_val(pixel, 0);
 					// add to queue
 					queue.push_back(pixel);
 				} 
@@ -846,12 +875,9 @@ class sdf2D
 			// wildfire
 			while(!queue.empty())
 			{
-				
 				// gets the last item from the queue
 				std::tuple<int, int> current = (queue.back());
 				queue.pop_back();
-
-				
 
 			}
 		}
@@ -903,6 +929,23 @@ class sdf2D
 			y_real = (std::get<1>(ind)*resolution) + (resolution/2);
 		}
 		
+
+		double get_val(std::tuple <int, int> index)
+		{
+			return sdf[(std::get<0>(index)*sdf_width)+ std::get<1>(index)];
+		}
+
+		double get_val(int x_ind, int y_ind)
+		{
+			return sdf[(x_ind*sdf_width)+ y_ind];
+		}
+
+		void set_val(std::tuple <int, int> index, double val)
+		{
+			sdf[(std::get<0>(index)*sdf_width)+ std::get<1>(index)] = val;
+
+		}		
+
 		void render()
 		{
 			// need to scale down
@@ -910,43 +953,55 @@ class sdf2D
 
 		~sdf2D()
 		{
-			std::cout << __LINE__ << std::endl;
-			
-			// for(int i = 0; i < sdf_width; i++)
-			// {
-			// 	std::cout << __LINE__ << std::endl;
-			// 	delete[] sdf[i];
-			// 	std::cout << __LINE__ << std::endl;
-			// }
+			std::cout << "calling from destructor" << std::endl;
+			reset();
+		}
+
+		void reset()
+		{
 			if(nullptr != sdf)
 			{
-				std::cout << sdf << std::endl;
-				std::cout << __LINE__ << std::endl;
-				std::cout << "sdf current first val" << sdf[0] << std::endl;
-				delete[] sdf;
-				std::cout << __LINE__ << std::endl;
-
-				sdf = nullptr;
-				std::cout << __LINE__ << std::endl;
-
+				std::cout << "deallocating size " << this->sdf_width*this->sdf_height << std::endl;
+				std::cout << (long long int)(this->sdf) << std::endl;
+				delete[] this->sdf;
+				this->sdf = nullptr;
 			}
 		}
 
 		void operator=(const sdf2D& input)
 		{
-			this->sdf_height = input.sdf_height;
-			this->sdf_width = input.sdf_width;
-			this->window_height = input.window_height;
-			this->window_width = input.window_width;
-			this->resolution = input.resolution;
+			std::cout << "assigning from " << this_id << " to " << id++ <<std::endl;
+			this->this_id = id;
+			this->copy(input);
 
-			sdf = new double[sdf_width*sdf_height];
-			for(int i = 0; i < sdf_width*sdf_height; i++)
-			{
-				sdf[i] = input.sdf[i];
-			}
+			// this->sdf_height = input.sdf_height;
+			// this->sdf_width = input.sdf_width;
+			// this->window_height = input.window_height;
+			// this->window_width = input.window_width;
+			// this->resolution = input.resolution;
+			// this->reset();
+			
+			// if(input.sdf != nullptr)
+			// {
+			// 	std::cout << "size " << this->sdf_width << " " << this->sdf_height << std::endl;
+			// 	std::cout << "Allocating size " << this->sdf_width*this->sdf_height << std::endl;
+			// 	this->sdf = new double[this->sdf_width*this->sdf_height]; // <- problem line!
+			// 	std::cout << (long long int)(this->sdf) << std::endl;
+			// 	// std::fill(sdf, sdf + (this->sdf_width*this->sdf_height), -1);
+			// // for(int i = 0; i < sdf_width*sdf_height; i++)
+			// // {
+			// // 	sdf[i] = input.sdf[i];
+			// // }
+			// 	// std::memcpy(sdf, input.sdf, sizeof(double) * sdf_width * sdf_height);
 
-
+			// }
+			// else
+			// {
+			// 	std::cout << __LINE__ <<std::endl;
+			// 	this->sdf = nullptr;
+			// }
+		
+			
 
 		}
 
@@ -1043,6 +1098,8 @@ class catheter : public render_entity
 
 		catheter(double x_origin, double y_origin, double x_dir, double y_dir, double joint_distance, int num_segments, double radius, double spring_const, collision_detector detector)
 		{
+			std::cout << __LINE__ << std::endl;
+
 			this->det = detector;
 			double unit_x = x_dir/hypot(x_dir, y_dir);
 			double unit_y = y_dir/hypot(x_dir, y_dir);
@@ -1084,7 +1141,6 @@ class catheter : public render_entity
 			std::cout << "cath build complete " << std::endl;
 
 
-			std::cout << __LINE__ << std::endl;
 
 		}
 
@@ -1199,6 +1255,7 @@ class catheter : public render_entity
 
 };
 
+int sdf2D::id = 0;
 
 int main()
 {
@@ -1213,7 +1270,6 @@ int main()
 	// std::cout << "attempted down. Post constrint: " << motion_down.remove_component(wall_vec).to_string() << std::endl;
 	// std::cout << "attempted left. Post constrint: " << motion_left.remove_component(wall_vec).to_string() << std::endl;
 	// std::cout << "attempted right. Post constrint: " << motion_right.remove_component(wall_vec).to_string() << std::endl;
-
 	
 
 	int window_width = 800;
@@ -1223,17 +1279,17 @@ int main()
 	std::vector<line_obstacle*> obs;
 	line_obstacle* line = new line_obstacle(5,7,10,7);
 	obs.push_back(line);
-	std::cout << __LINE__ << std::endl;
 
-	collision_detector cd = collision_detector(obs, window_width,window_height, 0.25);
-	std::cout << __LINE__ << std::endl;
+	collision_detector cd(obs, window_width,window_height, 0.25);
+
+	std::cout << "1 " << (long long int )(cd.dist_field.sdf) << std::endl;
 
 	catheter cath(1,1,0,1,1.5,2,0.25, 50, cd);
-	
+
 	std::cout << __LINE__ << std::endl;
+
 	std::cout << "opening window..." << std::endl;
 	FsOpenWindow(16,16,window_width,window_height,1);
-	std::cout << __LINE__ << std::endl;
 	int key;
 
 	
@@ -1272,25 +1328,20 @@ int main()
 			
         }
 
-		std::cout << __LINE__ << std::endl;
 
 		cath.update(dt);
-		std::cout << __LINE__ << std::endl;
 		
 		
 		glClear(GL_DEPTH_BUFFER_BIT|GL_COLOR_BUFFER_BIT);
 		cath.draw();
-		std::cout << __LINE__ << std::endl;
 
 		if(show_obstacles)
 		{
-			std::cout << __LINE__ << std::endl;
 			// draw obstacles
 			for (auto iter = obs.begin(); iter != obs.end(); iter++)
 			{
 				(*iter)->draw();
 			}
-			std::cout << __LINE__ << std::endl;
 		}
 		if(show_sdf)
 		{
@@ -1300,6 +1351,8 @@ int main()
         FsSwapBuffers();
         FsSleep(25);
 	}
+
+	std::cout << __LINE__ << std::endl;
 
 	return 0;
 }
