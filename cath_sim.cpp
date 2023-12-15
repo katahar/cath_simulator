@@ -6,6 +6,8 @@
 #include <string>
 #include <algorithm>
 #include <tuple>
+#include <queue>
+
 
 
 #include <iostream>
@@ -778,10 +780,8 @@ class line_obstacle: public render_entity
 class sdf2D
 {
 	public:
-		static int id;
-
-		int this_id;
 		double* sdf = nullptr;
+		int* sdf_render = nullptr;
 		
 		// width of the actual window
 		int window_width, window_height; 
@@ -791,6 +791,17 @@ class sdf2D
 
 		// add pix width and height
 		double resolution;
+
+		int directs[8][2] = {	{ 0, 1},
+								{ 1, 0},
+								{ 0,-1},
+								{-1, 0},
+								{-1,-1},
+								{ 1,-1},
+								{ 1, 1},
+								{-1, 1}	};
+
+		double dist [8] = { 1,1,1,1,sqrt(2), sqrt(2), sqrt(2), sqrt(2)};
 
 		sdf2D()
 		{
@@ -804,59 +815,85 @@ class sdf2D
 
 		void copy(const sdf2D &incoming)
 		{
+			std::cout << __LINE__ << std::endl;
 			this->sdf_height = incoming.sdf_height;
 			this->sdf_width = incoming.sdf_width;
 			this->window_height = incoming.window_height;
 			this->window_width = incoming.window_width;
 			this->resolution = incoming.resolution;
 			this->reset();
+			std::cout << __LINE__ << std::endl;
 
+			// scaling distances by resolutoin
+			for(int i = 0; i < 8; i++)
+			{
+				this->dist[i] = this->dist[i]*resolution;
+			}
+			std::cout << __LINE__ << std::endl;
+
+			// copying the sdf
 			if(incoming.sdf != nullptr)
 			{
 				// std::cout << "size " << this->sdf_width << " " << this->sdf_height << std::endl;
 				// std::cout << "Allocating size " << this->sdf_width*this->sdf_height << std::endl;
-				this->sdf = new double[this->sdf_width*this->sdf_height]; // <- problem line!
+
+				std::cout << __LINE__ << std::endl;
+				this->sdf = new double[this->sdf_width*this->sdf_height]; 
 				// std::cout << (long long int)(this->sdf) << std::endl;
+				std::cout << __LINE__ << std::endl;
 
 				std::memcpy(sdf, incoming.sdf, sizeof(double) * sdf_width * sdf_height);
+				std::cout << __LINE__ << std::endl;
 
 			}
+
+			std::cout << __LINE__ << std::endl;
+
+			// copying the sdf_render
+			if(incoming.sdf_render != nullptr)
+			{
+				std::cout << "Allocating size " <<  this->sdf_width << " * " << this->sdf_height << "= " << this->sdf_width*this->sdf_height << std::endl;
+				std::cout << __LINE__ << std::endl;
+				this->sdf_render = new int[this->window_width*this->window_height]; // <- problem line!
+				// std::cout << (long long int)(this->sdf) << std::endl;
+				std::cout << __LINE__ << std::endl;
+				std::memcpy(sdf_render, incoming.sdf_render, sizeof(int) * window_width * window_height);
+				std::cout << __LINE__ << std::endl;
+
+
+			}
+			std::cout << __LINE__ << std::endl;
+
+			
+
 		}
 
 		sdf2D(std::vector<line_obstacle> obstacles,int window_width,int window_height, double resolution)
 		{
-			this_id = id;
-			id++;
-
 			this->resolution = resolution;
 			this->window_height = window_height;
 			this->window_width = window_width;
 			this->sdf_width = int(window_width/resolution);
 			this->sdf_height = int(window_height/resolution);
 
-			// building 2d array
-			// sdf = new double*[sdf_width];
-			// for(int i = 0; i < sdf_width; i++)
-			// {
-			// 	sdf[i] = new double[sdf_height];
-			// 	for(int c = 0; c < sdf_height; c++)
-			// 	{
-			// 		sdf[i][c] = -1;
-			// 	}
-			// }
+			
+			std::cout << "Sdf Width:  " << sdf_width << ", sdf height " << sdf_height <<std::endl;
+			for(int i = 0; i < 8; i++)
+			{
+				this->dist[i] = this->dist[i]*resolution;
+			}
+
 
 			sdf = new double[sdf_width*sdf_height];
-			// std::fill(sdf, sdf + (this->sdf_width*this->sdf_height), -1);
+			std::fill(sdf, sdf + (this->sdf_width*this->sdf_height), -1);
 
-			// for(int i = 0; i < sdf_width*sdf_height; i++)
-			// {
-			// 	sdf[i] = -1;
-			// }
+			sdf_render = new int[window_width*window_height];
+			std::fill(sdf_render, sdf_render + (this->window_width*this->window_height), -1);
 
 
 			fill_sdf(obstacles);
 
-			// // print all values in sdf
+			// print all values in sdf
 			// for(int i = 0; i < sdf_width; i++)
 			// {
 			// 	for(int j = 0; j < sdf_height; j++)
@@ -875,7 +912,10 @@ class sdf2D
 		void fill_sdf(std::vector<line_obstacle> obstacles)
 		{
 			// staging locations to be evaluated
-			std::vector<std::tuple<int, int>> queue;
+			// std::vector<std::tuple<int, int>> queue;
+			// assumes locations in queue are indexes of the sdf. No real-world coordinates should be used.
+			std::queue<std::tuple<int, int>> q;
+
 
 			// adding obstacles to sdf
 			for(line_obstacle obs : obstacles)
@@ -886,21 +926,87 @@ class sdf2D
 				for(std::tuple<int, int> pixel: temp_pixels)
 				{
 					// update sdf as 0 distance to obstacle
-					set_val(pixel, 0);
+					set_sdf_val(pixel, 0);
 					// add to queue
-					queue.push_back(pixel);
+					q.push(pixel);
 				} 
 			}
 
-			// wildfire
-			while(!queue.empty())
+			std::cout << "Starting wavefront." << std::endl;
+
+			// filling values from obstacle locations. wildfire
+			while(!q.empty())
 			{
 				// gets the last item from the queue
-				std::tuple<int, int> current = (queue.back());
-				queue.pop_back();
+				std::tuple<int, int> current = (q.front());
+				q.pop();
 
+				// iterate over directions
+				for(int i = 0; i < 8; i++)
+				{
+					// std::cout << "location " <<  std::get<0>(current) << ", " << std::get<1>(current) << " rel val" << directs[i][0] << ", " << directs[i][1] << std::endl;
+					if(in_bounds((std::get<0>(current)+directs[i][0]),(std::get<1>(current)+directs[i][1]) ))
+					{
+						// if unexplored or farther than current+distance
+						if(get_sdf_val((std::get<0>(current)+directs[i][0]),(std::get<1>(current)+directs[i][1]) ) == -1 ||
+							get_sdf_val((std::get<0>(current)+directs[i][0]),(std::get<1>(current)+directs[i][1]) ) > get_sdf_val(current)+ dist[i]) 
+						{
+							// std::cout << __LINE__ << std::endl;
+							std::tuple<int, int> temp_pos = std::make_tuple((std::get<0>(current)+directs[i][0]),(std::get<1>(current)+directs[i][1]) );
+							// std::cout << "Sdf Width:  " << sdf_width << ", sdf height " << sdf_height <<std::endl;
+							// std::cout << "setting (" << std::get<0>(temp_pos) << ", "  << std::get<1>(temp_pos) << ") = " << get_val(current)+ dist[i] <<std::endl;
+							set_sdf_val(temp_pos, get_sdf_val(current)+ dist[i]);
+							q.push(temp_pos);
+						}
+					}
+				}
+				// if(q.size() %1000 ==0)
+				// {
+				// 	std::cout << "queue size" << q.size() << std::endl;
+				// }
 			}
+			std::cout << "wavefront complete." << std::endl;
+
+			fill_sdf_render();
+
+			std::cout << "render reference complete"<< std::endl;
+
 		}
+
+		void fill_sdf_render()
+		{
+			// used to scale color based on window size
+			int color_scale = std::min(window_height, window_width);
+			std::tuple <int, int> current_loc; 
+			for(int x = 0; x < window_width; x++)
+			{
+				for(int y = 0; y < window_height; y++)
+				{
+					// converts from world/sdf_render coordinates to sdf coordinates
+					current_loc =  pos_to_ind(x,y);
+					// updates based on block minimum
+					sdf_render[(x*window_width)+y] = int(255*(color_scale- get_block_min(x,y))/color_scale);
+					// std::cout << sdf_render[(x*window_width)+y] << " " ;
+				}
+				// std::cout << " " << std::endl;
+			}
+
+		}
+
+		// input is in sdf coordinates
+		double get_block_min(int x_ind, int y_ind)
+		{
+			double min_dist = get_sdf_val(x_ind,y_ind);
+			for(int i = 0; i < 8; i++)
+			{
+				if(in_bounds(x_ind + directs[i][0], x_ind + directs[i][1] ))
+				{
+					min_dist = std::min(min_dist, get_sdf_val(x_ind + directs[i][0], x_ind + directs[i][1]) );
+				}
+			}
+			return min_dist;
+		}
+
 
 		std::vector<std::tuple<int, int>>  line_to_pixels(line_obstacle obs)
 		{
@@ -917,19 +1023,52 @@ class sdf2D
 			// horizontal. vertical motion less than one block
 			if(abs(dy) < resolution)
 			{
-				std::cout << "Adding horizontal to sdf" << std::endl;
-				double temp_x = x1;
+				// std::cout << "Adding horizontal to sdf" << std::endl;
 				int steps = int(abs(dx/resolution));
 				for(int i = 0; i < steps; i++)
 				{
 					std::tuple<int,int> temp_pos = pos_to_ind(x1+(i*dx/steps),y1);
-					std::cout << "Point " << i << ": (" << std::get<0>(temp_pos) << ", " << std::get<1>(temp_pos) << ")" << std::endl;
+					// std::cout << "Point " << i << ": (" << std::get<0>(temp_pos) << ", " << std::get<1>(temp_pos) << ")" << std::endl;
 					points.push_back(temp_pos);
 				}
 				// add last point
 				points.push_back(pos_to_ind(x2,y2));
 				
 			}
+			// vertical
+			else if (abs(dx) < resolution)
+			{
+				// std::cout << "Adding vertical  to sdf" << std::endl;
+				int steps = int(abs(dy/resolution));
+				for(int i = 0; i < steps; i++)
+				{
+					std::tuple<int,int> temp_pos = pos_to_ind(x1,y1+(i*dy/steps));
+					// std::cout << "Point " << i << ": (" << std::get<0>(temp_pos) << ", " << std::get<1>(temp_pos) << ")" << std::endl;
+					points.push_back(temp_pos);
+				}
+				// add last point
+				points.push_back(pos_to_ind(x2,y2));
+				
+			}
+			// other lines
+			else
+			{
+				// std::cout << "Adding other to sdf" << std::endl;
+				int x_steps = int(abs(dy/resolution));
+				int y_steps = int(abs(dx/resolution));
+
+				int steps = std::max(x_steps,y_steps);
+				for(int i = 0; i < steps; i++)
+				{
+					std::tuple<int,int> temp_pos = pos_to_ind(x1+(i*dx/steps),y1+(i*dy/steps));
+					// std::cout << "Point " << i << ": (" << std::get<0>(temp_pos) << ", " << std::get<1>(temp_pos) << ")" << std::endl;
+					points.push_back(temp_pos);
+				}
+				// add last point
+				points.push_back(pos_to_ind(x2,y2));
+				
+			}
+
 
 			return points;
 
@@ -950,17 +1089,27 @@ class sdf2D
 		}
 		
 
-		double get_val(std::tuple <int, int> index)
+		double get_sdf_val(std::tuple <int, int> index)
 		{
 			return sdf[(std::get<0>(index)*sdf_width)+ std::get<1>(index)];
 		}
 
-		double get_val(int x_ind, int y_ind)
+		double get_sdf_val(std::tuple <int, int> index, int rel_x, int rel_y)
+		{
+			return sdf[((std::get<0>(index)+rel_x)*sdf_width)+ (std::get<1>(index)+rel_y)];
+		}
+
+		bool in_bounds(int x, int y)
+		{
+			return x<sdf_width && x>=0 && y<sdf_height && y>=0;
+		}
+
+		double get_sdf_val(int x_ind, int y_ind)
 		{
 			return sdf[(x_ind*sdf_width)+ y_ind];
 		}
 
-		void set_val(std::tuple <int, int> index, double val)
+		void set_sdf_val(std::tuple <int, int> index, double val)
 		{
 			sdf[(std::get<0>(index)*sdf_width)+ std::get<1>(index)] = val;
 
@@ -968,7 +1117,18 @@ class sdf2D
 
 		void render()
 		{
-			// need to scale down
+			glBegin(GL_POINTS);
+		
+			for(int x = 0; x < window_width; x++)
+			{
+				for(int y = 0; y < window_height; y++)
+				{
+					glColor3f(sdf_render[(x*window_width)+y],1,1);
+					glVertex2i(x,y);
+				}
+			}
+
+			glEnd();
 		}
 
 		~sdf2D()
@@ -986,12 +1146,19 @@ class sdf2D
 				delete[] this->sdf;
 				this->sdf = nullptr;
 			}
+
+			if(nullptr != sdf_render)
+			{
+				// std::cout << "deallocating size " << this->sdf_width*this->sdf_height << std::endl;
+				// std::cout << (long long int)(this->sdf) << std::endl;
+				delete[] this->sdf_render;
+				this->sdf_render = nullptr;
+			}
 		}
 
 		void operator=(const sdf2D& input)
 		{
 			// std::cout << "assigning from " << this_id << " to " << id++ <<std::endl;
-			// this->this_id = id;
 			this->copy(input);
 		
 
@@ -1010,21 +1177,28 @@ class collision_detector
 
 		collision_detector()
 		{
-			
+			std::cout << __LINE__ << std::endl;
+		}
+
+		collision_detector(const collision_detector &incoming)
+		{
+			copy(incoming);
 		}
 
 		// resolution is the number of units per pixel. Assumed to be meters
 		collision_detector( std::vector<line_obstacle> obstacles,int window_width,int window_height, double resolution)
 		{
+			std::cout << __LINE__ << std::endl;
 			this->obstacles = obstacles;
+			std::cout << __LINE__ << std::endl;
 			dist_field = sdf2D(obstacles, window_height, window_height, resolution);
-			
+			std::cout << __LINE__ << std::endl;
 		}
 
-		void build_sdf()
-		{
+		// void build_sdf()
+		// {
 
-		}
+		// }
 
 		
 		// returns index of obstacle connecting with node. If no collision, returns -1 
@@ -1055,13 +1229,18 @@ class collision_detector
 			dist_field.render();
 		}
 
-		// ~collision_detector()
-		// {
-		// 	for(int i = 0; i < obstacles.size(); i++)
-		// 	{
-		// 		delete obstacles[i];
-		// 	}
-		// }
+		void copy(const collision_detector &incoming)
+		{
+			this->dist_field = incoming.dist_field;
+			this->obstacles = incoming.obstacles;
+
+		}
+
+		void operator=(const collision_detector &incoming)
+		{
+			copy(incoming);
+
+		}
 
 
 	private:
@@ -1257,7 +1436,6 @@ class catheter : public render_entity
 
 };
 
-int sdf2D::id = 0;
 
 int main()
 {
@@ -1281,12 +1459,19 @@ int main()
 	std::vector<line_obstacle> obs;
 	line_obstacle line = line_obstacle(5,7,10,7);
 	obs.push_back(line);
+	line = line_obstacle(5,7,5,12);
+	obs.push_back(line);
+	line = line_obstacle(5,12, 10,7);
+	obs.push_back(line);
 
+	std::cout << __LINE__ << std::endl;
 	collision_detector cd(obs, window_width,window_height, 0.25);
 
 	// std::cout << "1 " << (long long int )(cd.dist_field.sdf) << std::endl;
+	std::cout << __LINE__ << std::endl;
 
 	catheter cath(1,1,0,1,1.5,2,0.25, 50, cd);
+	std::cout << __LINE__ << std::endl;
 
 
 	std::cout << "opening window..." << std::endl;
@@ -1353,6 +1538,6 @@ int main()
         FsSleep(25);
 	}
 
-
+	std::cout <<"Escape key pressed!" << std::endl;
 	return 0;
 }
