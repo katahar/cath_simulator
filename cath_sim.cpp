@@ -984,7 +984,7 @@ class sdf2D: public render_entity
 		void fill_sdf_render()
 		{
 			// used to scale color based on window size
-			// int color_scale = std::min(window_height, window_width);
+			int color_scale = 3;//std::min(window_height, window_width);
 
 			// double x_real_world, y_real_world;
 			int x_render, y_render;
@@ -994,7 +994,15 @@ class sdf2D: public render_entity
 				{
 					// converts from sdf to real world coordinates
 					sdf_to_rend(x_render, y_render, std::make_tuple(x,y));
-					sdf_render[(y_render*window_width)+x_render] = get_block_min(x,y);
+					if(get_block_min(x,y) > color_scale)
+					{
+						sdf_render[(y_render*window_width)+x_render] = 255;
+					}
+					else
+					{
+						sdf_render[(y_render*window_width)+x_render] = int(255*(get_block_min(x,y)/color_scale));
+					}
+
 				}
 			}
 
@@ -1140,7 +1148,7 @@ class sdf2D: public render_entity
 			{
 				for(int y = 0; y < window_height; y++)
 				{
-					glColor3f(sdf_render[(y*window_width)+x],0.5,0);
+					glColor3ub(255,sdf_render[(y*window_width)+x],255);
 					glVertex2i(x,window_height-y);
 				}
 			}
@@ -1177,8 +1185,6 @@ class sdf2D: public render_entity
 		{
 			// std::cout << "assigning from " << this_id << " to " << id++ <<std::endl;
 			this->copy(input);
-		
-
 		}
 
 		
@@ -1471,14 +1477,11 @@ int main()
 	line = line_obstacle(5,12, 10,7);
 	obs.push_back(line);
 
-	// std::cout << __LINE__ << std::endl;
 	collision_detector cd(obs, window_width,window_height, 0.10);
 
 	// std::cout << "1 " << (long long int )(cd.dist_field.sdf) << std::endl;
-	// std::cout << __LINE__ << std::endl;
 
 	catheter cath(1,1,0,1,1.5,2,0.25, 50, cd);
-	// std::cout << __LINE__ << std::endl;
 
 
 	std::cout << "opening window..." << std::endl;
@@ -1502,13 +1505,13 @@ int main()
 			cath.move_input(0, mv_vel);
 			break;
 		case FSKEY_DOWN:
-			cath.move_input(0, -mv_vel);
+			cath.move_input(0,-mv_vel);
 			break;
         case FSKEY_LEFT:
 			cath.move_input(-mv_vel, 0);
             break;
         case FSKEY_RIGHT:
-			cath.move_input(mv_vel, 0);
+			cath.move_input( mv_vel, 0);
             break;
 		case FSKEY_Q:
 			// show SDF
