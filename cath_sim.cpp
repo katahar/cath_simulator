@@ -783,14 +783,18 @@ class sdf2D: public render_entity
 		double* sdf = nullptr;
 		int* sdf_render = nullptr;
 		
-		// width of the actual window, render pixels
+		// width of the actual window, render units/pixels
 		int window_width, window_height; 
 
-		// size of the sdf when considering resolution: sdf pixels
+		// size of the sdf when considering resolution: sdf units
 		int sdf_width, sdf_height;
 
-		// render pixel/sdf pixel
-		double resolution;
+		// pixels and render units are interchangable 
+		// render unit/sdf unit
+		double rend_resolution;
+
+		// meter/sdf unit. calculated by  dividing rend_resolution (render unit/sdf unit) by scale (render unit/m)
+		double global_resolution;
 
 		int directs[8][2] = {	{ 0, 1},
 								{ 1, 0},
@@ -801,6 +805,7 @@ class sdf2D: public render_entity
 								{ 1, 1},
 								{-1, 1}	};
 
+		// to be scaled in meters
 		double dist [8] = { 1,1,1,1,sqrt(2), sqrt(2), sqrt(2), sqrt(2)};
 
 		sdf2D()
@@ -815,21 +820,22 @@ class sdf2D: public render_entity
 
 		void copy(const sdf2D &incoming)
 		{
-			std::cout << __LINE__ << std::endl;
+			// std::cout << __LINE__ << std::endl;
 			this->sdf_height = incoming.sdf_height;
 			this->sdf_width = incoming.sdf_width;
 			this->window_height = incoming.window_height;
 			this->window_width = incoming.window_width;
-			this->resolution = incoming.resolution;
+			this->rend_resolution = incoming.rend_resolution;
+			this->global_resolution = incoming.global_resolution;
 			this->reset();
-			std::cout << __LINE__ << std::endl;
+			// std::cout << __LINE__ << std::endl;
 
 			// scaling distances by resolutoin
 			for(int i = 0; i < 8; i++)
 			{
-				this->dist[i] = this->dist[i]*resolution;
+				this->dist[i] = this->dist[i]*global_resolution;
 			}
-			std::cout << __LINE__ << std::endl;
+			// std::cout << __LINE__ << std::endl;
 
 			// copying the sdf
 			if(incoming.sdf != nullptr)
@@ -844,7 +850,7 @@ class sdf2D: public render_entity
 
 			}
 
-			std::cout << __LINE__ << std::endl;
+			// std::cout << __LINE__ << std::endl;
 
 			// copying the sdf_render
 			if(incoming.sdf_render != nullptr)
@@ -861,19 +867,20 @@ class sdf2D: public render_entity
 
 		}
 
-		sdf2D(std::vector<line_obstacle> obstacles,int window_width,int window_height, double resolution)
+		sdf2D(std::vector<line_obstacle> obstacles,int window_width,int window_height, double rend_resolution)
 		{
-			this->resolution = resolution;
+			this->rend_resolution = rend_resolution;
+			this->global_resolution = rend_resolution/render_entity::scale;
 			this->window_height = window_height;
 			this->window_width = window_width;
-			this->sdf_width = int(window_width/resolution);
-			this->sdf_height = int(window_height/resolution);
+			this->sdf_width = int(window_width/rend_resolution);
+			this->sdf_height = int(window_height/rend_resolution);
 
 			
 			std::cout << "Sdf Width:  " << sdf_width << ", sdf height " << sdf_height <<std::endl;
 			for(int i = 0; i < 8; i++)
 			{
-				this->dist[i] = this->dist[i]*resolution;
+				this->dist[i] = this->dist[i]*global_resolution;
 			}
 
 
@@ -953,10 +960,7 @@ class sdf2D: public render_entity
 						}
 					}
 				}
-				// if(q.size() %1000 ==0)
-				// {
-				// 	std::cout << "queue size" << q.size() << std::endl;
-				// }
+
 			}
 			std::cout << "wavefront complete." << std::endl;
 
@@ -977,49 +981,13 @@ class sdf2D: public render_entity
 			{
 				for(int y = 0; y < sdf_height; y++)
 				{
-					// std::cout << __LINE__ << std::endl;
 					// converts from sdf to real world coordinates
 					sdf_to_rend(x_render, y_render, std::make_tuple(x,y));
-					// std::cout << __LINE__ << std::endl;
-					// converts real world coordinates to window/render coordinates 
-					// PhysicalCoordToScreenCoord(x_render,y_render, x_real_world, y_real_world);
-					// std::cout << __LINE__ << std::endl;
-					// std::cout <<"\t real world index: ("<< x_real_world << ", " << y_real_world << ")" << std::endl;
-					// std::cout <<"\t render index: ("<< x_render << ", " << y_render << ") or " << (x_render*window_width)+y_render << ": " << get_sdf_val(x,y) << "        "<< "max: " << window_width*window_height<<  std::endl;
 					sdf_render[(x_render*window_width)+y_render] = get_sdf_val(x,y);
-					// std::cout << __LINE__ << std::endl;
-				}
-				if(x%100 == 0)
-				{
-					std::cout << "On x_coordinate " << x << std::endl;
 				}
 			}
 
 			std::cout << "fill_sdf_render complete" << std::endl;
-
-
-
-
-
-
-
-
-
-			// // std::tuple <int, int> current_loc; 
-			// for(int x = 0; x < window_width; x++)
-			// {
-			// 	for(int y = 0; y < window_height; y++)
-			// 	{
-			// 		// converts from world/sdf_render coordinates to sdf coordinates
-			// 		// current_loc =  pos_to_ind(x,y);
-
-			// 		// convert real to screen. get block minimum. graph using
-			// 		// updates based on block minimum
-			// 		sdf_render[(x*window_width)+y] = int(255*((get_block_min(int(std::floor(x/resolution)), int(std::floor(y/resolution))))/color_scale));
-			// 		// std::cout << sdf_render[(x*window_width)+y] << " " ;
-			// 	}
-			// 	// std::cout << " " << std::endl;
-			// }
 
 		}
 
@@ -1050,59 +1018,56 @@ class sdf2D: public render_entity
 			double x1, y1, x2, y2, dx, dy;
 			obs.get_p1(x1, y1);
 			obs.get_p2(x2, y2);
-
-			// converting coordinates to sdf coordinates
-			real_to_sdf()
-			
+		
 			dx = x2-x1;
 			dy = y2-y1;
 
 			// horizontal. vertical motion less than one block
-			if(abs(dy) < resolution)
+			if(abs(dy) < global_resolution)
 			{
 				// std::cout << "Adding horizontal to sdf" << std::endl;
-				int steps = int(abs(dx/resolution));
+				int steps = int(abs(dx/global_resolution));
 				for(int i = 0; i < steps; i++)
 				{
-					std::tuple<int,int> temp_pos = pos_to_ind(x1+(i*dx/steps),y1);
+					std::tuple<int,int> temp_pos = real_to_sdf(x1+(i*dx/steps),y1);
 					// std::cout << "Point " << i << ": (" << std::get<0>(temp_pos) << ", " << std::get<1>(temp_pos) << ")" << std::endl;
 					points.push_back(temp_pos);
 				}
 				// add last point
-				points.push_back(pos_to_ind(x2,y2));
+				points.push_back(real_to_sdf(x2,y2));
 				
 			}
 			// vertical
-			else if (abs(dx) < resolution)
+			else if (abs(dx) < global_resolution)
 			{
 				// std::cout << "Adding vertical  to sdf" << std::endl;
-				int steps = int(abs(dy/resolution));
+				int steps = int(abs(dy/global_resolution));
 				for(int i = 0; i < steps; i++)
 				{
-					std::tuple<int,int> temp_pos = pos_to_ind(x1,y1+(i*dy/steps));
+					std::tuple<int,int> temp_pos = real_to_sdf(x1,y1+(i*dy/steps));
 					// std::cout << "Point " << i << ": (" << std::get<0>(temp_pos) << ", " << std::get<1>(temp_pos) << ")" << std::endl;
 					points.push_back(temp_pos);
 				}
 				// add last point
-				points.push_back(pos_to_ind(x2,y2));
+				points.push_back(real_to_sdf(x2,y2));
 				
 			}
 			// other lines
 			else
 			{
 				// std::cout << "Adding other to sdf" << std::endl;
-				int x_steps = int(abs(dy/resolution));
-				int y_steps = int(abs(dx/resolution));
+				int x_steps = int(abs(dy/global_resolution));
+				int y_steps = int(abs(dx/global_resolution));
 
 				int steps = std::max(x_steps,y_steps);
 				for(int i = 0; i < steps; i++)
 				{
-					std::tuple<int,int> temp_pos = pos_to_ind(x1+(i*dx/steps),y1+(i*dy/steps));
+					std::tuple<int,int> temp_pos = real_to_sdf(x1+(i*dx/steps),y1+(i*dy/steps));
 					// std::cout << "Point " << i << ": (" << std::get<0>(temp_pos) << ", " << std::get<1>(temp_pos) << ")" << std::endl;
 					points.push_back(temp_pos);
 				}
 				// add last point
-				points.push_back(pos_to_ind(x2,y2));
+				points.push_back(real_to_sdf(x2,y2));
 				
 			}
 
@@ -1113,52 +1078,27 @@ class sdf2D: public render_entity
 
 
 		// converts real-world coordinates to indices on the sdf;
-		std::tuple <int, int> pos_to_ind(double x, double y)
+		std::tuple <int, int> real_to_sdf(double x, double y)
 		{
-			return std::make_tuple(int(std::floor((x/render_entity::scale)/resolution)), int(std::floor((y/render_entity::scale)/resolution))); //floor and int casting is probably redundant
+			return std::make_tuple(int(std::floor(x/global_resolution)), int(std::floor(y/global_resolution))); //floor and int casting is probably redundant
 		}
-
-		// // converts real-world coordinates to indices on the sdf;
-		// void pos_to_ind(int y, double x, double y)
-		// {
-		// 	return std::make_tuple(int(std::floor(x/resolution)), int(std::floor(y/resolution))); //floor and int casting is probably redundant
-		// }
-
-		// // converts sdf pixel coordinates to real world coordinates.  Assumes center of pixel
-		// void ind_to_pos(double& x_real, double& y_real, std::tuple <int, int> ind)
-		// {
-		// 	x_real = (std::get<0>(ind)*resolution) + (resolution/2);
-		// 	y_real = (std::get<1>(ind)*resolution) + (resolution/2);
-		// }
-		
+	
 		// converts sdf pixel coordinates to rendering coordinates.  
 		void sdf_to_rend(int& x_rend, int& y_rend, std::tuple <int, int> ind_sdf)
 		{
-			x_rend = int((std::get<0>(ind_sdf)*resolution));
-			y_rend = int((std::get<1>(ind_sdf)*resolution));
+			x_rend = int((std::get<0>(ind_sdf)*rend_resolution));
+			y_rend = int((std::get<1>(ind_sdf)*rend_resolution));
 		}
 
-		void rend_to_sdf(int& x_rend, int& y_rend, std::tuple <int, int> ind_sdf)
-		{
-			x_rend = int((std::get<0>(ind_sdf)/resolution));
-			y_rend = int((std::get<1>(ind_sdf)/resolution));
-		}
+	
 
-		// converts real-world coordinates to sdf coordinates
-		void real_to_sdf(int& x_sdf, int& y_sdf, std::tuple <int, int> real_loc)
-		{
-			int x_rend,y_rend;
-			PhysicalCoordToScreenCoord(x_rend,y_rend, std::get<0>(real_loc), std::get<1>(real_loc));
-
-			x_sdf = int(x_rend/resolution);
-			y_sdf = int(y_rend/resolution);
-		}
-
+		// input is sdf indices
 		double get_sdf_val(std::tuple <int, int> index)
 		{
 			return sdf[(std::get<0>(index)*sdf_width)+ std::get<1>(index)];
 		}
 
+		// input is sdf indices and a relative direction
 		double get_sdf_val(std::tuple <int, int> index, int rel_x, int rel_y)
 		{
 			return sdf[((std::get<0>(index)+rel_x)*sdf_width)+ (std::get<1>(index)+rel_y)];
@@ -1253,18 +1193,12 @@ class collision_detector
 		// resolution is the number of units per pixel. Assumed to be meters
 		collision_detector( std::vector<line_obstacle> obstacles,int window_width,int window_height, double resolution)
 		{
-			std::cout << __LINE__ << std::endl;
+			// std::cout << __LINE__ << std::endl;
 			this->obstacles = obstacles;
-			std::cout << __LINE__ << std::endl;
+			// std::cout << __LINE__ << std::endl;
 			dist_field = sdf2D(obstacles, window_height, window_height, resolution);
-			std::cout << __LINE__ << std::endl;
+			// std::cout << __LINE__ << std::endl;
 		}
-
-		// void build_sdf()
-		// {
-
-		// }
-
 		
 		// returns index of obstacle connecting with node. If no collision, returns -1 
 		int check_collision(node* nd)
@@ -1529,14 +1463,14 @@ int main()
 	line = line_obstacle(5,12, 10,7);
 	obs.push_back(line);
 
-	std::cout << __LINE__ << std::endl;
+	// std::cout << __LINE__ << std::endl;
 	collision_detector cd(obs, window_width,window_height, 0.10);
 
 	// std::cout << "1 " << (long long int )(cd.dist_field.sdf) << std::endl;
-	std::cout << __LINE__ << std::endl;
+	// std::cout << __LINE__ << std::endl;
 
 	catheter cath(1,1,0,1,1.5,2,0.25, 50, cd);
-	std::cout << __LINE__ << std::endl;
+	// std::cout << __LINE__ << std::endl;
 
 
 	std::cout << "opening window..." << std::endl;
