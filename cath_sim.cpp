@@ -930,13 +930,6 @@ class sdf2D: public render_entity
 				} 
 			}
 
-			std::cout << "Checking dists: " ;
-			for(int i = 0; i < 8; i++)
-			{
-				std::cout << dist[i] << ", ";
-			}
-			std::cout << "" << std::endl;
-
 			std::cout << "Starting wavefront." << std::endl;
 
 			// filling values from obstacle locations. wildfire
@@ -1201,7 +1194,6 @@ class collision_detector
 
 		collision_detector()
 		{
-			// std::cout << __LINE__ << std::endl;
 		}
 
 		collision_detector(const collision_detector &incoming)
@@ -1212,11 +1204,8 @@ class collision_detector
 		// resolution is the number of units per pixel. Assumed to be meters
 		collision_detector( std::vector<line_obstacle> obstacles,int window_width,int window_height, double resolution)
 		{
-			// std::cout << __LINE__ << std::endl;
 			this->obstacles = obstacles;
-			// std::cout << __LINE__ << std::endl;
 			dist_field = sdf2D(obstacles, window_width, window_height, resolution);
-			// std::cout << __LINE__ << std::endl;
 		}
 		
 		// returns index of obstacle connecting with node. If no collision, returns -1 
