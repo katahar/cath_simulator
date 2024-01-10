@@ -912,10 +912,8 @@ class sdf2D: public render_entity
 		void fill_sdf(std::vector<line_obstacle> obstacles)
 		{
 			// staging locations to be evaluated
-			// std::vector<std::tuple<int, int>> queue;
 			// assumes locations in queue are indexes of the sdf. No real-world coordinates should be used.
 			std::queue<std::tuple<int, int>> q;
-
 
 			// adding obstacles to sdf
 			for(line_obstacle obs : obstacles)
@@ -932,34 +930,54 @@ class sdf2D: public render_entity
 				} 
 			}
 
+			std::cout << "Checking dists: " ;
+			for(int i = 0; i < 8; i++)
+			{
+				std::cout << dist[i] << ", ";
+			}
+			std::cout << "" << std::endl;
+
 			std::cout << "Starting wavefront." << std::endl;
 
 			// filling values from obstacle locations. wildfire
 			while(!q.empty())
 			{
-				// gets the last item from the queue
+				//pulls from front of queue
+
 				std::tuple<int, int> current = (q.front());
 				q.pop();
+
 
 				// iterate over directions
 				for(int i = 0; i < 8; i++)
 				{
-					// std::cout << "location " <<  std::get<0>(current) << ", " << std::get<1>(current) << " rel val" << directs[i][0] << ", " << directs[i][1] << std::endl;
+					
 					if(in_bounds((std::get<0>(current)+directs[i][0]),(std::get<1>(current)+directs[i][1]) ))
 					{
+
+						// std::cout << "location " <<  std::get<0>(current) << ", " << std::get<1>(current) << " rel val " << directs[i][0] << ", " << directs[i][1] << std::endl;
+						// in_bounds((std::get<0>(current)+directs[i][0]),(std::get<1>(current)+directs[i][1]), true);
+						
 						// if unexplored or farther than current+distance
 						if(get_sdf_val((std::get<0>(current)+directs[i][0]),(std::get<1>(current)+directs[i][1]) ) == -1 ||
 							get_sdf_val((std::get<0>(current)+directs[i][0]),(std::get<1>(current)+directs[i][1]) ) > get_sdf_val(current)+ dist[i]) 
 						{
-							// std::cout << __LINE__ << std::endl;
+
 							std::tuple<int, int> temp_pos = std::make_tuple((std::get<0>(current)+directs[i][0]),(std::get<1>(current)+directs[i][1]) );
 							// std::cout << "Sdf Width:  " << sdf_width << ", sdf height " << sdf_height <<std::endl;
 							// std::cout << "setting (" << std::get<0>(temp_pos) << ", "  << std::get<1>(temp_pos) << ") = " << get_val(current)+ dist[i] <<std::endl;
-							set_sdf_val(temp_pos, get_sdf_val(current)+ dist[i]);
+							// std::cout << __LINE__ << std::endl;
+							set_sdf_val(temp_pos, get_sdf_val(current)+ dist[i]); 
+							// std::cout << __LINE__ << std::endl;
+
 							q.push(temp_pos);
 						}
+
 					}
+					
+
 				}
+				
 
 			}
 			std::cout << "wavefront complete." << std::endl;
@@ -973,7 +991,7 @@ class sdf2D: public render_entity
 		void fill_sdf_render()
 		{
 			// used to scale color based on window size
-			int color_scale = std::min(window_height, window_width);
+			// int color_scale = std::min(window_height, window_width);
 
 			// double x_real_world, y_real_world;
 			int x_render, y_render;
@@ -983,7 +1001,7 @@ class sdf2D: public render_entity
 				{
 					// converts from sdf to real world coordinates
 					sdf_to_rend(x_render, y_render, std::make_tuple(x,y));
-					sdf_render[(x_render*window_width)+y_render] = get_sdf_val(x,y);
+					sdf_render[(y_render*window_width)+x_render] = get_block_min(x,y);
 				}
 			}
 
@@ -994,10 +1012,10 @@ class sdf2D: public render_entity
 		// input is in sdf coordinates
 		double get_block_min(int x_ind, int y_ind)
 		{
-			// @TODO: Remove test return here
+
 			double min_dist = get_sdf_val(x_ind,y_ind);
+			// @TODO: Remove this return to actually get block min
 			return min_dist;
-			//--------
 
 			for(int i = 0; i < 8; i++)
 			{
@@ -1090,34 +1108,35 @@ class sdf2D: public render_entity
 			y_rend = int((std::get<1>(ind_sdf)*rend_resolution));
 		}
 
-	
+		bool in_bounds(int x, int y, bool debug = false)
+		{
+			if(debug)
+			{
+				std::cout << "x: " << x << " y: " << y << " xub: " << (x<sdf_width) << " yub: " << (y<sdf_height) << " lb " << (y>=0 && x>=0) << std::endl;
+			}
+			return x<sdf_width && x>=0 && y<sdf_height && y>=0;
+		}
 
 		// input is sdf indices
 		double get_sdf_val(std::tuple <int, int> index)
 		{
-			return sdf[(std::get<0>(index)*sdf_width)+ std::get<1>(index)];
+			return sdf[(std::get<1>(index)*sdf_width)+ std::get<0>(index)];
 		}
 
 		// input is sdf indices and a relative direction
 		double get_sdf_val(std::tuple <int, int> index, int rel_x, int rel_y)
 		{
-			return sdf[((std::get<0>(index)+rel_x)*sdf_width)+ (std::get<1>(index)+rel_y)];
-		}
-
-		bool in_bounds(int x, int y)
-		{
-			return x<sdf_width && x>=0 && y<sdf_height && y>=0;
+			return sdf[((std::get<1>(index)+rel_y)*sdf_width)+ (std::get<0>(index)+rel_x)];
 		}
 
 		double get_sdf_val(int x_ind, int y_ind)
 		{
-			return sdf[(x_ind*sdf_width)+ y_ind];
+			return sdf[(y_ind*sdf_width)+ x_ind];
 		}
 
 		void set_sdf_val(std::tuple <int, int> index, double val)
 		{
-			sdf[(std::get<0>(index)*sdf_width)+ std::get<1>(index)] = val;
-
+			sdf[(std::get<1>(index)*sdf_width)+ std::get<0>(index)] = val;
 		}		
 
 		void render()
@@ -1128,7 +1147,7 @@ class sdf2D: public render_entity
 			{
 				for(int y = 0; y < window_height; y++)
 				{
-					glColor3f(sdf_render[(x*window_width)+y],0.5,0);
+					glColor3f(sdf_render[(y*window_width)+x],0.5,0);
 					glVertex2i(x,window_height-y);
 				}
 			}
@@ -1182,7 +1201,7 @@ class collision_detector
 
 		collision_detector()
 		{
-			std::cout << __LINE__ << std::endl;
+			// std::cout << __LINE__ << std::endl;
 		}
 
 		collision_detector(const collision_detector &incoming)
@@ -1196,7 +1215,7 @@ class collision_detector
 			// std::cout << __LINE__ << std::endl;
 			this->obstacles = obstacles;
 			// std::cout << __LINE__ << std::endl;
-			dist_field = sdf2D(obstacles, window_height, window_height, resolution);
+			dist_field = sdf2D(obstacles, window_width, window_height, resolution);
 			// std::cout << __LINE__ << std::endl;
 		}
 		
