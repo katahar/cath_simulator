@@ -508,8 +508,11 @@ class node: public render_entity
 			// vel[1] = vel[1]  + acc[1]*dt;
 			// pos[0] = pos[0]  + vel[0]*dt;
 			// pos[1] = pos[1]  + vel[1]*dt;
-
+			double damping = 5;
 			vel = vel + (acc*dt);
+			acc = acc - (vel*damping*dt);
+
+			vel = (acc*dt);
 			pos = pos + (vel*dt);
 		}
 
@@ -1498,9 +1501,10 @@ class catheter : public render_entity
 				}
 		}
 
-		// resolves surface penetration as defined by the SDF by applying 
+		// resolves surface penetration as defined by the SDF by applying spring force on the node
 		void resolve_penetration(node* node, double dt, double spring_const)
 		{
+			node->reset();
 			double penetration_dist = det.get_penetration_dist(node);
 			std::cout << "penetration distance " << penetration_dist << std::endl;
 			vector obstacle_norm = det.get_obs_norm(node->get_pos(0), node->get_pos(1));
@@ -1512,12 +1516,13 @@ class catheter : public render_entity
 
 		void update(double dt)
 		{
+			double obstacle_spring_const = 50;
 			int col_ind = -1;
 			
 			if(-1 != det.check_collision(nodes[0]))
 			{
-				std::cout << "Detected collision on input node" << std::endl;
-				resolve_penetration(nodes[0],dt, 50);
+				// std::cout << "Detected collision on input node" << std::endl;
+				resolve_penetration(nodes[0],dt, obstacle_spring_const);
 			}
 			nodes[0]->reset();
 			nodes[0]->enforce_dist_constraint(nullptr,dt);
@@ -1528,7 +1533,16 @@ class catheter : public render_entity
 			{
 				nodes[i]->reset();
 
-				
+								// col_ind = det.check_collision(nodes[i+1]);
+				if(-1 != det.check_collision(nodes[i+1]))
+				{
+					// std::cout << "\t old acc: " << nodes[i+1]->acc.to_string() << " new acc:  ";
+					// vector obstacle_norm = det.get_obs_norm(nodes[i+1]->get_pos(0), nodes[i+1]->get_pos(1));
+					// nodes[i+1]->apply_constraint(obstacle_norm);
+					// std::cout << nodes[i+1]->acc.to_string()  << std::endl;
+					resolve_penetration(nodes[i+1], dt, obstacle_spring_const);
+				}
+
 				// std::cout << "enforcing distance constraint for node " <<  std::to_string(i) << "....";
 				nodes[i]->enforce_dist_constraint(nodes[i-1],dt);
 				// std::cout << "done" << std::endl;
@@ -1545,14 +1559,7 @@ class catheter : public render_entity
 				nodes[i+1]->move(dt);
 				
 				
-				col_ind = det.check_collision(nodes[i+1]);
-				if(-1 != col_ind)
-				{
-					// std::cout << "\t old acc: " << nodes[i+1]->acc.to_string() << " new acc:  ";
-					vector obstacle_norm = det.get_obs_norm(nodes[i+1]->get_pos(0), nodes[i+1]->get_pos(1));
-					nodes[i+1]->apply_constraint(obstacle_norm);
-					std::cout << nodes[i+1]->acc.to_string()  << std::endl;
-				}
+
 
 									
 			}
@@ -1640,11 +1647,11 @@ int main()
 
 	// add obstacles
 	std::vector<line_obstacle> obs;
-	line_obstacle line = line_obstacle(5,7,10,7);
+	line_obstacle line = line_obstacle(5,7,12,7);
 	obs.push_back(line);
 	line = line_obstacle(5,7,5,12);
 	obs.push_back(line);
-	line = line_obstacle(5,12, 10,7);
+	line = line_obstacle(5,12, 12,7);
 	obs.push_back(line);
 
 	collision_detector cd(obs, window_width,window_height, cd_res, node_rad);
