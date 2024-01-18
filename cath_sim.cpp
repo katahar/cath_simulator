@@ -141,8 +141,6 @@ class vector
 		    // Compute the projection of velocity onto the wall normal
 			vector projection = input_norm*(this->dot(input_vec));
 
-			return projection;
-			// to complete
 			vector ret_vec = (*this)-projection;
 
 			return ret_vec;
@@ -805,6 +803,24 @@ class sdf2D: public render_entity
 								{ 1, 1},
 								{-1, 1}	};
 
+		int extended_directs[16][2]= {  {0,2},
+										{1,2},
+										{2,2},
+										{2,1},
+										{2,0},
+										{2,-1},
+										{2,-2},
+										{1,-2},
+										{0,-2},
+										{-1,-2},
+										{-2,-2},
+										{-2,-1},
+										{-2,0},
+										{-2,1},
+										{-2,2},
+										{-1,2} 	};
+
+
 		// to be scaled in meters
 		double dist [8] = { 1,1,1,1,sqrt(2), sqrt(2), sqrt(2), sqrt(2)};
 
@@ -1010,7 +1026,7 @@ class sdf2D: public render_entity
 
 		}
 
-		// input is in sdf coordinates
+		// input is in sdf coordinates @TODO: actually implement
 		double get_block_min(int x_ind, int y_ind)
 		{
 
@@ -1028,6 +1044,40 @@ class sdf2D: public render_entity
 			return min_dist;
 		}
 
+		// returns direction toward the nearest obstacle (increments of pi/4). Input is in sdf coordinates
+		vector get_gradient(int x_sdf, int y_sdf)
+		{
+			std::cout << "sdf value at current point (" <<   x_sdf << ", " <<  y_sdf << "): " << get_sdf_val(x_sdf, y_sdf) << std::endl;
+			
+			for(int i = 7; i >=0; i--)
+			{
+				if(in_bounds(x_sdf + directs[i][0], y_sdf + directs[i][1] ))
+				{
+
+					// std::cout << "sdf at (" <<   x_sdf + directs[i][0] << ", " <<  y_sdf + directs[i][1] << "): " << get_sdf_val(x_sdf + directs[i][0], y_sdf + directs[i][1] ) << std::endl;
+					if(get_sdf_val(x_sdf + directs[i][0], y_sdf + directs[i][1] ) < get_sdf_val(x_sdf,y_sdf)  )
+					{
+						return vector(directs[i][0], directs[i][1] );
+					}
+				}
+			}
+
+			// for(int i = 0; i <16; i++)
+			// {
+			// 	if(in_bounds(x_sdf + extended_directs[i][0], y_sdf + extended_directs[i][1] ))
+			// 	{
+
+			// 		std::cout << "sdf at (" <<   x_sdf + extended_directs[i][0] << ", " <<  y_sdf + extended_directs[i][1] << "): " << get_sdf_val(x_sdf + extended_directs[i][0], y_sdf + extended_directs[i][1] ) << std::endl;
+			// 		if(get_sdf_val(x_sdf + extended_directs[i][0], y_sdf + extended_directs[i][1] ) < get_sdf_val(x_sdf,y_sdf)  )
+			// 		{
+			// 			return vector(extended_directs[i][0], extended_directs[i][1] ).normalize();
+			// 		}
+			// 	}
+			// }
+
+			
+			
+		}
 
 		std::vector<std::tuple<int, int>>  line_to_pixels(line_obstacle obs)
 		{
@@ -1100,6 +1150,14 @@ class sdf2D: public render_entity
 		std::tuple <int, int> real_to_sdf(double x, double y)
 		{
 			return std::make_tuple(int(std::floor(x/global_resolution)), int(std::floor(y/global_resolution))); //floor and int casting is probably redundant
+		}
+
+		// converts real-world coordinates to indices on the sdf;
+		void real_to_sdf(int& x_sdf, int& y_sdf, double x, double y)
+		{
+			x_sdf = int(std::floor(x/global_resolution));
+			y_sdf = int(std::floor(y/global_resolution)); //floor and int casting is probably redundant
+			// std::cout << "real: " << x << ", " << y << ", sdf: " << x_sdf << ", " << y_sdf << std::endl;
 		}
 	
 		// converts sdf pixel coordinates to rendering coordinates.  
@@ -1197,6 +1255,8 @@ class collision_detector
 	public: 
 		std::vector<line_obstacle> obstacles;
 		sdf2D dist_field;
+		double node_rad;
+
 
 		collision_detector()
 		{
@@ -1208,10 +1268,11 @@ class collision_detector
 		}
 
 		// resolution is the number of units per pixel. Assumed to be meters
-		collision_detector( std::vector<line_obstacle> obstacles,int window_width,int window_height, double resolution)
+		collision_detector( std::vector<line_obstacle> obstacles,int window_width,int window_height, double resolution, double node_rad)
 		{
 			this->obstacles = obstacles;
 			dist_field = sdf2D(obstacles, window_width, window_height, resolution);
+			this->node_rad = node_rad;
 		}
 		
 		// returns index of obstacle connecting with node. If no collision, returns -1 
@@ -1220,10 +1281,15 @@ class collision_detector
 			int ind = 0;
 			for(auto iter = obstacles.begin(); iter != obstacles.end(); iter++)
 			{
-				if( coarse_overlap(nd, (*iter)))
+				if(true)
+				// if( coarse_overlap(nd, (*iter)))
 				{
-					std::cout << "overlap detected!: (" << nd->get_pos(0) << ", " << nd->get_pos(1) << ") and line (" << (*iter).pos[0] << ", " <<  (*iter).pos[1] << ") -> (" << (*iter).pos[2] << ", " <<  (*iter).pos[3] << ")" << std::endl; 
-					return ind;
+					// std::cout << "coarse overlap detected!: (" << nd->get_pos(0) << ", " << nd->get_pos(1) << ") and line (" << (*iter).pos[0] << ", " <<  (*iter).pos[1] << ") -> (" << (*iter).pos[2] << ", " <<  (*iter).pos[3] << ")" << std::endl; 
+					if(fine_overlap(nd))
+					{
+						std::cout << "fine overlap detected!" << std::endl;
+						return ind;
+					}
 				};
 				ind++;
 			}
@@ -1231,10 +1297,18 @@ class collision_detector
 
 		}
 
-		// returns a vector re
+		// // returns a vector re
 		vector get_constraint_vec(int index)
 		{
 			return obstacles[index].get_vec();	
+		}
+
+		// returns approximation of obstacle norm at given point (pointing toward obstacle). Input is in global coordinates
+		vector get_obs_norm(double x_pos, double y_pos)
+		{
+			int x_sdf, y_sdf; 
+			dist_field.real_to_sdf(x_sdf, y_sdf, x_pos, y_pos);
+			return dist_field.get_gradient(x_sdf,y_sdf);
 		}
 
 		void render_sdf()
@@ -1246,6 +1320,7 @@ class collision_detector
 		{
 			this->dist_field = incoming.dist_field;
 			this->obstacles = incoming.obstacles;
+			this->node_rad = incoming.node_rad;
 
 		}
 
@@ -1255,14 +1330,25 @@ class collision_detector
 
 		}
 
+		double get_penetration_dist(node* nd)
+		{
+			int x_sdf, y_sdf; 
+			dist_field.real_to_sdf(x_sdf, y_sdf, nd->get_pos(0), nd->get_pos(1));
+			// std::cout << "sdf at current location is" << dist_field.get_sdf_val(x_sdf, y_sdf) << std::endl;
+			if(dist_field.get_sdf_val(x_sdf, y_sdf)  > nd->get_rad() )
+			{
+				return 0;
+			}
+			return nd->get_rad() - dist_field.get_sdf_val(x_sdf, y_sdf) ;
+		}
 
 	private:
 		bool coarse_overlap(node* nd, line_obstacle obstacle)
 		{
-			double nd_x_l = nd->get_pos().at(0) - nd->get_rad()/2;
-			double nd_x_r = nd->get_pos().at(0) + nd->get_rad()/2;
-			double nd_y_b = nd->get_pos().at(1) - nd->get_rad()/2;
-			double nd_y_t = nd->get_pos().at(1) + nd->get_rad()/2;
+			double nd_x_l = nd->get_pos().at(0) - nd->get_rad();
+			double nd_x_r = nd->get_pos().at(0) + nd->get_rad();
+			double nd_y_b = nd->get_pos().at(1) - nd->get_rad();
+			double nd_y_t = nd->get_pos().at(1) + nd->get_rad();
 
 			// AABB bounding box
 			if(nd_x_l<obstacle.get_x_right() &&
@@ -1274,6 +1360,14 @@ class collision_detector
 			}
 			return false;
 
+		}
+
+		bool fine_overlap(node* nd)
+		{
+			int x_sdf, y_sdf; 
+			dist_field.real_to_sdf(x_sdf, y_sdf, nd->get_pos(0), nd->get_pos(1));
+			// std::cout << "sdf at current location is" << dist_field.get_sdf_val(x_sdf, y_sdf) << std::endl;
+			return dist_field.get_sdf_val(x_sdf, y_sdf) <= this->node_rad;
 		}
 };
 
@@ -1341,21 +1435,40 @@ class catheter : public render_entity
 				double y_constrained = y;
 				
 				int col_ind = det.check_collision(base_node);
-				if(-1 != col_ind)
+				// collision detected
+				// std::cout << __LINE__ << std::endl;
+
+				if(false)
+				// if(-1 != col_ind)
 				{
-					// this is the direction of the wall, not the normal
-					vector constraint = det.get_constraint_vec(col_ind);
-					// constraint = constraint.get_perpen_toward()
-					vector motion = vector(x_constrained,y_constrained);
+					
+					
+					
+					std::cout << __LINE__ << std::endl;
+					vector input_motion = vector(x,y);
+					std::cout << __LINE__ << std::endl;
+					vector obstacle_norm = det.get_obs_norm(base_node->get_pos(0), base_node->get_pos(1));
+					std::cout << __LINE__ << std::endl;
+					std::cout << "input motion" << input_motion.to_string() << std::endl;
+					std::cout << "obstacle norm being removed" << obstacle_norm.to_string() << std::endl;
+					vector constrained_motion = input_motion.remove_component(obstacle_norm);
+					std::cout << __LINE__ << std::endl;
 
-					vector new_motion = constraint.normalize()*(constraint.dot(motion));
+					// // this is the direction of the wall, not the normal
+					// vector constraint = det.get_constraint_vec(col_ind);
+					// // constraint = constraint.get_perpen_toward()
+					// vector motion = vector(x_constrained,y_constrained);
+
+					// vector new_motion = constraint.normalize()*(constraint.dot(motion));
 
 
 
-					std::cout << "Input Motion: " << motion.to_string();
+					std::cout << "Input Motion: " << input_motion.to_string();
 					// motion = motion.remove_component(constraint);
-					std::cout << "new motion: " << new_motion.to_string() <<std::endl;
-					base_node->move_rel_pos(new_motion);
+					std::cout << "new motion: " << constrained_motion.to_string() <<std::endl;
+					base_node->move_rel_pos(constrained_motion);
+
+
 					// std::cout << "\t old acc: " << nodes[i+1]->acc.to_string() << " new acc:  ";
 					// base_node->apply_constraint(det.get_constraint_vec(col_ind));
 					// std::cout << nodes[i+1]->acc.to_string()  << std::endl;
@@ -1366,10 +1479,27 @@ class catheter : public render_entity
 				}
 		}
 
+		// resolves surface penetration as defined by the SDF by applying 
+		void resolve_penetration(node* node, double dt, double spring_const)
+		{
+			double penetration_dist = det.get_penetration_dist(node);
+			std::cout << "penetration distance " << penetration_dist << std::endl;
+			vector obstacle_norm = det.get_obs_norm(node->get_pos(0), node->get_pos(1));
+			node->add_accel(obstacle_norm*-1*spring_const*penetration_dist);
+			std::cout << "applied accel" << (obstacle_norm*-1*spring_const*penetration_dist).to_string() << std::endl;
+			node->move(dt);
+
+		}
+
 		void update(double dt)
 		{
 			int col_ind = -1;
-
+			
+			if(-1 != det.check_collision(nodes[0]))
+			{
+				std::cout << "Detected collision on input node" << std::endl;
+				resolve_penetration(nodes[0],dt, 50);
+			}
 			nodes[0]->reset();
 			nodes[0]->enforce_dist_constraint(nullptr,dt);
 			nodes[1]->move(dt);
@@ -1391,15 +1521,21 @@ class catheter : public render_entity
 
 				// std::cout << "node " << std::to_string(i)<< " pushing node  " << std::to_string(i+1) << ": " << nodes[i+1]->to_string() << std::endl;
 				// std::cout << "Acceleration after adding bending and constraints: " << nodes[i]->get_acc().to_string() << std::endl;
+				
+				// moved to before the collision detection 
+				nodes[i+1]->move(dt);
+				
+				
 				col_ind = det.check_collision(nodes[i+1]);
 				if(-1 != col_ind)
 				{
 					// std::cout << "\t old acc: " << nodes[i+1]->acc.to_string() << " new acc:  ";
-					nodes[i+1]->apply_constraint(det.get_constraint_vec(col_ind));
+					vector obstacle_norm = det.get_obs_norm(nodes[i+1]->get_pos(0), nodes[i+1]->get_pos(1));
+					nodes[i+1]->apply_constraint(obstacle_norm);
 					std::cout << nodes[i+1]->acc.to_string()  << std::endl;
 				}
 
-				nodes[i+1]->move(dt);					
+									
 			}
 			nodes[num_nodes-1]->reset();
 			// std::cout << "---------------------------------" << std::endl;
@@ -1468,6 +1604,21 @@ int main()
 	int window_width = 800;
 	int window_height = 600;
 
+	// catheter params
+	double x_start = 1;
+	double y_start = 1;
+	double x_dir = 0;
+	double y_dir = 1;
+	double joint_dist = 1.5;
+	int num_segs = 2;
+	double node_rad = 0.25;
+	double spring_const = 50;
+
+	// collisoion detection params
+	double cd_res = 0.10;
+
+
+
 	// add obstacles
 	std::vector<line_obstacle> obs;
 	line_obstacle line = line_obstacle(5,7,10,7);
@@ -1477,11 +1628,11 @@ int main()
 	line = line_obstacle(5,12, 10,7);
 	obs.push_back(line);
 
-	collision_detector cd(obs, window_width,window_height, 0.10);
+	collision_detector cd(obs, window_width,window_height, cd_res, node_rad);
 
 	// std::cout << "1 " << (long long int )(cd.dist_field.sdf) << std::endl;
 
-	catheter cath(1,1,0,1,1.5,2,0.25, 50, cd);
+	catheter cath(x_start, y_start, x_dir, y_dir, joint_dist, num_segs, node_rad, spring_const, cd);
 
 
 	std::cout << "opening window..." << std::endl;
@@ -1491,7 +1642,7 @@ int main()
 	
 
 	double mv_vel = 0.5;
-	double dt = 0.05;
+	double dt = 0.1;
 
 	bool show_sdf = false;
 	bool show_obstacles = true;
@@ -1502,16 +1653,16 @@ int main()
 		switch(key)
         {
 		case FSKEY_UP:
-			cath.move_input(0, mv_vel);
+			cath.move_input(0, mv_vel*dt);
 			break;
 		case FSKEY_DOWN:
-			cath.move_input(0,-mv_vel);
+			cath.move_input(0,-mv_vel*dt);
 			break;
         case FSKEY_LEFT:
-			cath.move_input(-mv_vel, 0);
+			cath.move_input(-mv_vel*dt, 0);
             break;
         case FSKEY_RIGHT:
-			cath.move_input( mv_vel, 0);
+			cath.move_input( mv_vel*dt, 0);
             break;
 		case FSKEY_Q:
 			// show SDF
