@@ -1048,6 +1048,9 @@ class sdf2D: public render_entity
 		vector get_gradient(int x_sdf, int y_sdf)
 		{
 			std::cout << "sdf value at current point (" <<   x_sdf << ", " <<  y_sdf << "): " << get_sdf_val(x_sdf, y_sdf) << std::endl;
+			double min_grad = 1000;
+			int min_ind = -1;
+			
 			
 			for(int i = 7; i >=0; i--)
 			{
@@ -1055,12 +1058,28 @@ class sdf2D: public render_entity
 				{
 
 					// std::cout << "sdf at (" <<   x_sdf + directs[i][0] << ", " <<  y_sdf + directs[i][1] << "): " << get_sdf_val(x_sdf + directs[i][0], y_sdf + directs[i][1] ) << std::endl;
-					if(get_sdf_val(x_sdf + directs[i][0], y_sdf + directs[i][1] ) < get_sdf_val(x_sdf,y_sdf)  )
+					if(get_sdf_val(x_sdf + directs[i][0], y_sdf + directs[i][1] ) < get_sdf_val(x_sdf,y_sdf) && get_sdf_val(x_sdf + directs[i][0], y_sdf + directs[i][1] ) < min_grad )
 					{
-						return vector(directs[i][0], directs[i][1] );
+						min_ind = i;
+						min_grad = get_sdf_val(x_sdf + directs[i][0], y_sdf + directs[i][1] );
 					}
 				}
 			}
+			return vector(directs[min_ind][0], directs[min_ind][1] );
+
+
+			// for(int i = 7; i >=0; i--)
+			// {
+			// 	if(in_bounds(x_sdf + directs[i][0], y_sdf + directs[i][1] ))
+			// 	{
+
+			// 		// std::cout << "sdf at (" <<   x_sdf + directs[i][0] << ", " <<  y_sdf + directs[i][1] << "): " << get_sdf_val(x_sdf + directs[i][0], y_sdf + directs[i][1] ) << std::endl;
+			// 		if(get_sdf_val(x_sdf + directs[i][0], y_sdf + directs[i][1] ) < get_sdf_val(x_sdf,y_sdf)  )
+			// 		{
+			// 			return vector(directs[i][0], directs[i][1] );
+			// 		}
+			// 	}
+			// }
 
 			// for(int i = 0; i <16; i++)
 			// {
