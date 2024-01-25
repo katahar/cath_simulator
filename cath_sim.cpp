@@ -501,7 +501,7 @@ class node: public render_entity
 			acc = vector(x,y);
 		}
 		
-		//updates velocity based on acceleration, then updates position based on velocity
+		//updates velocity based on acceleration, then updates position based on velocity. Velocity always reset to 0
 		void move(double dt)
 		{
 			// vel[0] = vel[0]  + acc[0]*dt;
@@ -777,6 +777,129 @@ class line_obstacle: public render_entity
 
 };
 
+class closed_obstacle
+{
+	public: 
+		// in global frame.
+		std::vector<line_obstacle> lines;
+		int num_sides;
+
+		// in global frame. Never manually assigned. Always derived
+		vector center; 
+
+		closed_obstacle()
+		{
+			//nothing
+		}
+
+		closed_obstacle(const closed_obstacle &input)
+		{
+			copy(input);
+		}
+
+		closed_obstacle(std::vector<line_obstacle> lines)
+		{
+			this->lines = lines;
+			num_sides = lines.size();
+			this->calculate_center();
+		}
+
+		// populates from a vector of corner points
+		closed_obstacle(std::vector<vector> points)
+		{
+			this->num_sides = points.size();
+			for(int i = 0; i < num_sides-1; i++)
+			{
+				line_obstacle temp_line = line_obstacle(points[i].at(0),points[i].at(1), points[i+1].at(0),points[i+1].at(1) );
+				this->lines.push_back(temp_line);
+			}
+			// side from the last point to the first
+			line_obstacle temp_line = line_obstacle(points[num_sides-1].at(0),points[num_sides-1].at(1), points[0].at(0),points[0].at(1));
+			this->lines.push_back(temp_line);
+
+			this->calculate_center();
+
+		}
+
+		void operator=(const closed_obstacle &input)
+		{
+			copy(input);
+		}
+
+		vector get_center()
+		{
+			return center;
+		}
+
+		line_obstacle get_line(int index)
+		{
+			if(index<num_sides)
+			{
+				return lines[index];
+			}
+			else
+			{
+				std::cout << "ERROR: side index outside of bounds" << std::endl;
+			}
+		}
+
+		// returns another closed_obstacle recentered at new location. Shape and orientation is maintained
+		closed_obstacle transform(vector new_center)
+		{
+			vector offset = new_center-this->center;
+			
+			std::vector<line_obstacle> new_lines;
+			for(int i = 0; i < this->num_sides; i++)
+			{
+				double x1, y1, x2, y2;
+				lines[i].get_p1(x1,y1);
+				lines[i].get_p2(x2,y2);
+				line_obstacle temp_line = line_obstacle(x1 + offset.at(0), y1 + offset.at(1), x2+offset.at(0), y2+offset.at(1));
+				new_lines.push_back(temp_line);
+			}
+
+			closed_obstacle ret_obs = closed_obstacle(new_lines);
+			return ret_obs;
+		}
+
+		int get_num_sides()
+		{
+			return this->num_sides;
+		}
+
+		void draw()
+		{
+			for(line_obstacle ln:lines)
+			{
+				ln.draw();
+			}
+		}
+
+	private:
+		void copy(const closed_obstacle &input)
+		{
+			this->lines = input.lines;
+			this->num_sides = lines.size();
+
+			this->calculate_center();
+		}
+
+		void calculate_center()
+		{
+			double x_cent = 0, y_cent = 0, x_temp, y_temp;
+			for(int i = 0; i < num_sides; i++)
+			{
+				// only need the first one because
+				lines[i].get_p1(x_temp, y_temp);
+				x_cent +=x_temp;
+				y_cent += y_temp;
+			}
+			center = vector(x_cent/num_sides, y_cent/num_sides);
+		}
+
+
+};
+
 
 class sdf2D: public render_entity
 {
@@ -826,6 +949,8 @@ class sdf2D: public render_entity
 
 		// to be scaled in meters
 		double dist [8] = { 1,1,1,1,sqrt(2), sqrt(2), sqrt(2), sqrt(2)};
+
+		
 
 		sdf2D()
 		{
@@ -928,6 +1053,49 @@ class sdf2D: public render_entity
 			std::cout << "SDF complete." << std::endl;
 		}
 
+		sdf2D(std::vector<closed_obstacle> obstacles,int window_width,int window_height, double rend_resolution)
+		{
+			this->rend_resolution = rend_resolution;
+			this->global_resolution = rend_resolution/render_entity::scale;
+			this->window_height = window_height;
+			this->window_width = window_width;
+			this->sdf_width = int(window_width/rend_resolution);
+			this->sdf_height = int(window_height/rend_resolution);
+
+			
+			std::cout << "Sdf Width:  " << sdf_width << ", sdf height " << sdf_height <<std::endl;
+			for(int i = 0; i < 8; i++)
+			{
+				this->dist[i] = this->dist[i]*global_resolution;
+			}
+
+
+			sdf = new double[sdf_width*sdf_height];
+			std::fill(sdf, sdf + (this->sdf_width*this->sdf_height), -1);
+
+			sdf_render = new int[window_width*window_height];
+			std::fill(sdf_render, sdf_render + (this->window_width*this->window_height), -1);
+
+
+			fill_sdf(obstacles);
+
+			// print all values in sdf
+			// for(int i = 0; i < sdf_width; i++)
+			// {
+			// 	for(int j = 0; j < sdf_height; j++)
+			// 	{
+			// 		if(get_val(i,j) != -1)
+			// 		{
+			// 			std::cout << get_val(i, j) << " " ;
+			// 		}
+			// 	}
+			// 	// std:: cout << "" << std::endl;
+			// }
+			
+			std::cout << "SDF complete." << std::endl;
+		}
+
+
 		void fill_sdf(std::vector<line_obstacle> obstacles)
 		{
 			// staging locations to be evaluated
@@ -949,6 +1117,115 @@ class sdf2D: public render_entity
 				} 
 			}
 
+			run_wavefront(q);
+
+			fill_sdf_render();
+
+			std::cout << "render reference complete"<< std::endl;
+
+		}
+
+		void fill_sdf(std::vector<closed_obstacle> obstacles)
+		{
+			// staging locations to be evaluated
+			// assumes locations in queue are indexes of the sdf. No real-world coordinates should be used.
+			std::queue<std::tuple<int, int>> q;
+
+			// adding obstacles to sdf
+			for(closed_obstacle obs : obstacles)
+			{
+				for(int i = 0; i < obs.get_num_sides(); i++)
+				{
+
+					std::vector<std::tuple<int, int>> temp_pixels = line_to_pixels(obs.get_line(i));
+
+					// iterate through line pixels
+					for(std::tuple<int, int> pixel: temp_pixels)
+					{
+						// update sdf as 0 distance to obstacle
+						set_sdf_val(pixel, 0);
+						// add to queue
+						q.push(pixel);
+					} 
+				}
+
+			}
+
+			run_wavefront(q);
+
+			negate_interior(obstacles);
+
+			fill_sdf_render();
+
+			std::cout << "render reference complete"<< std::endl;
+
+		}
+
+		//gives interior of obstacles negative sdf values
+		void negate_interior(std::vector<closed_obstacle> obstacles)
+		{
+			std::queue<std::tuple<int, int>> q;
+
+			// adds all obstacle centers to the queue
+			for(closed_obstacle obs:obstacles)
+			{
+				std::tuple<int,int> temp_pos = real_to_sdf(obs.get_center().at(0), obs.get_center().at(1));
+				q.push(temp_pos);
+			}
+
+			run_neg_wavefront(q);
+		}
+
+		void run_neg_wavefront(std::queue<std::tuple<int, int>> q)
+		{
+			std::cout << "Starting neg wavefront." << std::endl;
+
+			// filling values from obstacle locations. wildfire
+			while(!q.empty())
+			{
+				//pulls from front of queue
+
+				std::tuple<int, int> current = (q.front());
+				q.pop();
+
+
+				// iterate over directions
+				for(int i = 0; i < 8; i++)
+				{
+					
+					if(in_bounds((std::get<0>(current)+directs[i][0]),(std::get<1>(current)+directs[i][1]) ))
+					{
+
+						std::cout << "location " <<  std::get<0>(current) << ", " << std::get<1>(current) << " rel val " << directs[i][0] << ", " << directs[i][1] << std::endl;
+						// in_bounds((std::get<0>(current)+directs[i][0]),(std::get<1>(current)+directs[i][1]), true);
+						
+						// if not an obstacle boundary
+						if(get_sdf_val((std::get<0>(current)+directs[i][0]),(std::get<1>(current)+directs[i][1]) ) >0 )
+						{
+
+							std::tuple<int, int> temp_pos = std::make_tuple((std::get<0>(current)+directs[i][0]),(std::get<1>(current)+directs[i][1]) );
+							// std::cout << "Sdf Width:  " << sdf_width << ", sdf height " << sdf_height <<std::endl;
+							std::cout << "setting (" << std::get<0>(temp_pos) << ", "  << std::get<1>(temp_pos) << ") = " <<std::endl;
+							// std::cout << __LINE__ << std::endl;
+							set_sdf_val(temp_pos, -1*get_sdf_val(current)); 
+							// std::cout << __LINE__ << std::endl;
+
+							q.push(temp_pos);
+						}
+
+					}
+					
+
+				}
+				
+
+			}
+			std::cout << "neg wavefront complete." << std::endl;
+
+		}
+
+		void run_wavefront(std::queue<std::tuple<int, int>> q)
+		{
 			std::cout << "Starting wavefront." << std::endl;
 
 			// filling values from obstacle locations. wildfire
@@ -993,10 +1270,6 @@ class sdf2D: public render_entity
 
 			}
 			std::cout << "wavefront complete." << std::endl;
-
-			fill_sdf_render();
-
-			std::cout << "render reference complete"<< std::endl;
 
 		}
 
@@ -1070,25 +1343,10 @@ class sdf2D: public render_entity
 			}
 			return vector(directs[min_ind][0], directs[min_ind][1] );
 
-
-			// for(int i = 7; i >=0; i--)
-			// {
-			// 	if(in_bounds(x_sdf + directs[i][0], y_sdf + directs[i][1] ))
-			// 	{
-
-			// 		// std::cout << "sdf at (" <<   x_sdf + directs[i][0] << ", " <<  y_sdf + directs[i][1] << "): " << get_sdf_val(x_sdf + directs[i][0], y_sdf + directs[i][1] ) << std::endl;
-			// 		if(get_sdf_val(x_sdf + directs[i][0], y_sdf + directs[i][1] ) < get_sdf_val(x_sdf,y_sdf)  )
-			// 		{
-			// 			return vector(directs[i][0], directs[i][1] );
-			// 		}
-			// 	}
-			// }
-
 			// for(int i = 0; i <16; i++)
 			// {
 			// 	if(in_bounds(x_sdf + extended_directs[i][0], y_sdf + extended_directs[i][1] ))
 			// 	{
-
 			// 		std::cout << "sdf at (" <<   x_sdf + extended_directs[i][0] << ", " <<  y_sdf + extended_directs[i][1] << "): " << get_sdf_val(x_sdf + extended_directs[i][0], y_sdf + extended_directs[i][1] ) << std::endl;
 			// 		if(get_sdf_val(x_sdf + extended_directs[i][0], y_sdf + extended_directs[i][1] ) < get_sdf_val(x_sdf,y_sdf)  )
 			// 		{
@@ -1096,9 +1354,7 @@ class sdf2D: public render_entity
 			// 		}
 			// 	}
 			// }
-
-			
-			
+		
 		}
 
 		std::vector<std::tuple<int, int>>  line_to_pixels(line_obstacle obs)
@@ -1275,7 +1531,8 @@ class sdf2D: public render_entity
 class collision_detector
 {
 	public: 
-		std::vector<line_obstacle> obstacles;
+		// std::vector<line_obstacle> line_obs;
+		// std::vector<closed_obstacle> closed_obs;
 		sdf2D dist_field;
 		double node_rad;
 
@@ -1292,38 +1549,53 @@ class collision_detector
 		// resolution is the number of units per pixel. Assumed to be meters
 		collision_detector( std::vector<line_obstacle> obstacles,int window_width,int window_height, double resolution, double node_rad)
 		{
-			this->obstacles = obstacles;
+			// this->line_obs = obstacles;
 			dist_field = sdf2D(obstacles, window_width, window_height, resolution);
 			this->node_rad = node_rad;
 		}
 		
+		// resolution is the number of units per pixel. Assumed to be meters
+		collision_detector( std::vector<closed_obstacle> obstacles,int window_width,int window_height, double resolution, double node_rad)
+		{
+			// this->closed_obs = obstacles;
+			dist_field = sdf2D(obstacles, window_width, window_height, resolution);
+			this->node_rad = node_rad;
+		}
+
 		// returns index of obstacle connecting with node. If no collision, returns -1 
 		int check_collision(node* nd)
 		{
-			int ind = 0;
-			for(auto iter = obstacles.begin(); iter != obstacles.end(); iter++)
+			// int ind = 0;
+			// for(auto iter = line_obs.begin(); iter != line_obs.end(); iter++)
+			// {
+			// 	if(true)
+			// 	// if( coarse_overlap(nd, (*iter)))
+			// 	{
+			// 		// std::cout << "coarse overlap detected!: (" << nd->get_pos(0) << ", " << nd->get_pos(1) << ") and line (" << (*iter).pos[0] << ", " <<  (*iter).pos[1] << ") -> (" << (*iter).pos[2] << ", " <<  (*iter).pos[3] << ")" << std::endl; 
+			// 		if(fine_overlap(nd))
+			// 		{
+			// 			std::cout << "fine overlap detected!" << std::endl;
+			// 			return ind;
+			// 		}
+			// 	};
+			// 	ind++;
+			// }
+			// return -1;
+
+			if(fine_overlap(nd))
 			{
-				if(true)
-				// if( coarse_overlap(nd, (*iter)))
-				{
-					// std::cout << "coarse overlap detected!: (" << nd->get_pos(0) << ", " << nd->get_pos(1) << ") and line (" << (*iter).pos[0] << ", " <<  (*iter).pos[1] << ") -> (" << (*iter).pos[2] << ", " <<  (*iter).pos[3] << ")" << std::endl; 
-					if(fine_overlap(nd))
-					{
-						std::cout << "fine overlap detected!" << std::endl;
-						return ind;
-					}
-				};
-				ind++;
+				std::cout << "fine overlap detected!" << std::endl;
+				return 1;
 			}
 			return -1;
 
 		}
 
-		// // returns a vector re
-		vector get_constraint_vec(int index)
-		{
-			return obstacles[index].get_vec();	
-		}
+		// // // returns a vector re
+		// vector get_constraint_vec(int index)
+		// {
+		// 	return obstacles[index].get_vec();	
+		// }
 
 		// returns approximation of obstacle norm at given point (pointing toward obstacle). Input is in global coordinates
 		vector get_obs_norm(double x_pos, double y_pos)
@@ -1338,20 +1610,6 @@ class collision_detector
 			dist_field.render();
 		}
 
-		void copy(const collision_detector &incoming)
-		{
-			this->dist_field = incoming.dist_field;
-			this->obstacles = incoming.obstacles;
-			this->node_rad = incoming.node_rad;
-
-		}
-
-		void operator=(const collision_detector &incoming)
-		{
-			copy(incoming);
-
-		}
-
 		double get_penetration_dist(node* nd)
 		{
 			int x_sdf, y_sdf; 
@@ -1364,25 +1622,43 @@ class collision_detector
 			return nd->get_rad() - dist_field.get_sdf_val(x_sdf, y_sdf) ;
 		}
 
-	private:
-		bool coarse_overlap(node* nd, line_obstacle obstacle)
+		void copy(const collision_detector &incoming)
 		{
-			double nd_x_l = nd->get_pos().at(0) - nd->get_rad();
-			double nd_x_r = nd->get_pos().at(0) + nd->get_rad();
-			double nd_y_b = nd->get_pos().at(1) - nd->get_rad();
-			double nd_y_t = nd->get_pos().at(1) + nd->get_rad();
-
-			// AABB bounding box
-			if(nd_x_l<obstacle.get_x_right() &&
-				nd_x_r>obstacle.get_x_left() &&
-				nd_y_b<obstacle.get_y_top() &&
-				nd_y_t>obstacle.get_y_bot())
-			{
-				return true;
-			}
-			return false;
+			this->dist_field = incoming.dist_field;
+			// this->line_obs = incoming.line_obs;
+			this->node_rad = incoming.node_rad;
 
 		}
+
+		void operator=(const collision_detector &incoming)
+		{
+			copy(incoming);
+
+		}
+
+
+
+	private:
+
+		// // retired
+		// bool coarse_overlap(node* nd, line_obstacle obstacle)
+		// {
+		// 	double nd_x_l = nd->get_pos().at(0) - nd->get_rad();
+		// 	double nd_x_r = nd->get_pos().at(0) + nd->get_rad();
+		// 	double nd_y_b = nd->get_pos().at(1) - nd->get_rad();
+		// 	double nd_y_t = nd->get_pos().at(1) + nd->get_rad();
+
+		// 	// AABB bounding box
+		// 	if(nd_x_l<obstacle.get_x_right() &&
+		// 		nd_x_r>obstacle.get_x_left() &&
+		// 		nd_y_b<obstacle.get_y_top() &&
+		// 		nd_y_t>obstacle.get_y_bot())
+		// 	{
+		// 		return true;
+		// 	}
+		// 	return false;
+
+		// }
 
 		bool fine_overlap(node* nd)
 		{
@@ -1460,6 +1736,7 @@ class catheter : public render_entity
 				// collision detected
 				// std::cout << __LINE__ << std::endl;
 
+				// @todo: fix this if. Keeping for reference for now.
 				if(false)
 				// if(-1 != col_ind)
 				{
@@ -1645,14 +1922,25 @@ int main()
 
 
 
-	// add obstacles
-	std::vector<line_obstacle> obs;
-	line_obstacle line = line_obstacle(5,7,12,7);
-	obs.push_back(line);
-	line = line_obstacle(5,7,5,12);
-	obs.push_back(line);
-	line = line_obstacle(5,12, 12,7);
-	obs.push_back(line);
+	// // add line obstacles
+	// std::vector<line_obstacle> obs;
+	// line_obstacle line = line_obstacle(5,7,12,7);
+	// obs.push_back(line);
+	// line = line_obstacle(5,7,5,12);
+	// obs.push_back(line);
+	// line = line_obstacle(5,12, 12,7);
+	// obs.push_back(line);
+
+	// add closed obstacles
+	std::vector<closed_obstacle> obs;
+	std::vector<vector> obs_corners;
+	obs_corners.emplace_back(5,7); 
+	obs_corners.emplace_back(12,7); 
+	obs_corners.emplace_back(5,12); 
+
+	closed_obstacle temp_obs = closed_obstacle(obs_corners);
+	obs.push_back(temp_obs);
+	obs.push_back(temp_obs.transform(vector(20,20)));
 
 	collision_detector cd(obs, window_width,window_height, cd_res, node_rad);
 
