@@ -7,7 +7,8 @@
 #include <algorithm>
 #include <tuple>
 #include <queue>
-
+#include <chrono>
+#include <ctime>
 
 
 #include <iostream>
@@ -949,7 +950,7 @@ class sdf2D: public render_entity
 
 		// to be scaled in meters
 		double dist [8] = { 1,1,1,1,sqrt(2), sqrt(2), sqrt(2), sqrt(2)};
-
+		std::chrono::time_point<std::chrono::system_clock> startTime;
 		
 
 		sdf2D()
@@ -1079,22 +1080,44 @@ class sdf2D: public render_entity
 
 			fill_sdf(obstacles);
 
+			// h range 4-6
+			// v range 11 - 13
+			int x_low, x_high, y_low, y_high;
+			real_to_sdf(x_low, y_low, 4.8,6.5);
+			real_to_sdf(x_high, y_high, 5.5,7.25);
+
+			std::cout << "x window: " << x_low << ", " << x_high << "\t y window" << y_low << ", " << y_high << std::endl;
+
 			// print all values in sdf
-			// for(int i = 0; i < sdf_width; i++)
-			// {
-			// 	for(int j = 0; j < sdf_height; j++)
-			// 	{
-			// 		if(get_val(i,j) != -1)
-			// 		{
-			// 			std::cout << get_val(i, j) << " " ;
-			// 		}
-			// 	}
-			// 	// std:: cout << "" << std::endl;
-			// }
+			for(int j = y_high; j > y_low; j--)
+			{
+				for(int i = x_low; i < x_high; i++)
+				{
+					if(get_sdf_val(i, j) != 0)
+					{
+						std::cout <<     printf("%.1f", get_sdf_val(i, j) )<< " " ;
+					}
+					else
+					{
+						std::cout <<     printf("*.*") << " " ;
+					}
+				}
+				std:: cout << "" << std::endl;
+			}
 			
 			std::cout << "SDF complete." << std::endl;
 		}
 
+        void start_timer()
+        {
+            startTime = std::chrono::system_clock::now();
+        }
+
+        int cumulative_time()
+        {
+            std::chrono::time_point<std::chrono::system_clock> curTime = std::chrono::system_clock::now();
+            return ceil(std::chrono::duration_cast<std::chrono::milliseconds>(curTime - startTime).count()/1000);
+        }
 
 		void fill_sdf(std::vector<line_obstacle> obstacles)
 		{
@@ -1170,6 +1193,7 @@ class sdf2D: public render_entity
 			for(closed_obstacle obs:obstacles)
 			{
 				std::tuple<int,int> temp_pos = real_to_sdf(obs.get_center().at(0), obs.get_center().at(1));
+				set_sdf_val(temp_pos, -1*get_sdf_val(temp_pos));
 				q.push(temp_pos);
 			}
 
@@ -1180,6 +1204,11 @@ class sdf2D: public render_entity
 		{
 			std::cout << "Starting neg wavefront." << std::endl;
 
+			// int interior_x, interior_y, ext_x, ext_y;
+			// real_to_sdf(interior_x, interior_y, 11,9);
+			// real_to_sdf(ext_x, ext_y, 11,9);
+
+
 			// filling values from obstacle locations. wildfire
 			while(!q.empty())
 			{
@@ -1187,31 +1216,41 @@ class sdf2D: public render_entity
 
 				std::tuple<int, int> current = (q.front());
 				q.pop();
+				// std::cout << "evaluating "<<  std::get<0>(current) << ", " << std::get<1>(current) << std::endl;
 
 
 				// iterate over directions
-				for(int i = 0; i < 8; i++)
+				for(int i = 0; i < 4; i++)
 				{
 					
 					if(in_bounds((std::get<0>(current)+directs[i][0]),(std::get<1>(current)+directs[i][1]) ))
 					{
 
-						std::cout << "location " <<  std::get<0>(current) << ", " << std::get<1>(current) << " rel val " << directs[i][0] << ", " << directs[i][1] << std::endl;
+						// std::cout << "location " <<  std::get<0>(current) << ", " << std::get<1>(current) << " rel val " << directs[i][0] << ", " << directs[i][1] << std::endl;
 						// in_bounds((std::get<0>(current)+directs[i][0]),(std::get<1>(current)+directs[i][1]), true);
 						
 						// if not an obstacle boundary
-						if(get_sdf_val((std::get<0>(current)+directs[i][0]),(std::get<1>(current)+directs[i][1]) ) >0 )
+						if(get_sdf_val((std::get<0>(current)+directs[i][0]),(std::get<1>(current)+directs[i][1]) ) > 0 )
 						{
 
 							std::tuple<int, int> temp_pos = std::make_tuple((std::get<0>(current)+directs[i][0]),(std::get<1>(current)+directs[i][1]) );
 							// std::cout << "Sdf Width:  " << sdf_width << ", sdf height " << sdf_height <<std::endl;
-							std::cout << "setting (" << std::get<0>(temp_pos) << ", "  << std::get<1>(temp_pos) << ") = " <<std::endl;
+							// std::cout << "setting (" << std::get<0>(temp_pos) << ", "  << std::get<1>(temp_pos) << ") = " <<std::endl;
 							// std::cout << __LINE__ << std::endl;
-							set_sdf_val(temp_pos, -1*get_sdf_val(current)); 
+							set_sdf_val(temp_pos, -1*get_sdf_val(current, directs[i][0], directs[i][1])); 
 							// std::cout << __LINE__ << std::endl;
 
 							q.push(temp_pos);
 						}
+						// else if (get_sdf_val((std::get<0>(current)+directs[i][0]),(std::get<1>(current)+directs[i][1]) ) == 0)
+						// {
+						// 	std::cout << "hit wall" << std::endl;
+						// }
+
+					}
+					else
+					{
+						std::cout << "\toutside of bounds. location " <<  std::get<0>(current)+directs[i][0] << ", " << std::get<1>(current) +directs[i][1] << std::endl;
 
 					}
 					
@@ -1227,6 +1266,8 @@ class sdf2D: public render_entity
 		void run_wavefront(std::queue<std::tuple<int, int>> q)
 		{
 			std::cout << "Starting wavefront." << std::endl;
+			start_timer();
+
 
 			// filling values from obstacle locations. wildfire
 			while(!q.empty())
@@ -1269,7 +1310,7 @@ class sdf2D: public render_entity
 				
 
 			}
-			std::cout << "wavefront complete." << std::endl;
+			std::cout << "wavefront complete. " << cumulative_time() << " seconds" << std::endl;
 
 		}
 
@@ -1373,7 +1414,7 @@ class sdf2D: public render_entity
 			if(abs(dy) < global_resolution)
 			{
 				// std::cout << "Adding horizontal to sdf" << std::endl;
-				int steps = int(abs(dx/global_resolution));
+				int steps = int(abs(dx/global_resolution))*20;
 				for(int i = 0; i < steps; i++)
 				{
 					std::tuple<int,int> temp_pos = real_to_sdf(x1+(i*dx/steps),y1);
@@ -1388,7 +1429,7 @@ class sdf2D: public render_entity
 			else if (abs(dx) < global_resolution)
 			{
 				// std::cout << "Adding vertical  to sdf" << std::endl;
-				int steps = int(abs(dy/global_resolution));
+				int steps = int(abs(dy/global_resolution))*20;
 				for(int i = 0; i < steps; i++)
 				{
 					std::tuple<int,int> temp_pos = real_to_sdf(x1,y1+(i*dy/steps));
@@ -1406,7 +1447,7 @@ class sdf2D: public render_entity
 				int x_steps = int(abs(dy/global_resolution));
 				int y_steps = int(abs(dx/global_resolution));
 
-				int steps = std::max(x_steps,y_steps);
+				int steps = std::max(x_steps,y_steps)*20; // @todo: probably a better way to scale this. Originally added because of gaps in lines.
 				for(int i = 0; i < steps; i++)
 				{
 					std::tuple<int,int> temp_pos = real_to_sdf(x1+(i*dx/steps),y1+(i*dy/steps));
@@ -1484,7 +1525,14 @@ class sdf2D: public render_entity
 			{
 				for(int y = 0; y < window_height; y++)
 				{
-					glColor3ub(255,sdf_render[(y*window_width)+x],255);
+					if(sdf_render[(y*window_width)+x] > 0)
+					{
+						glColor3ub(255, 255,sdf_render[(y*window_width)+x]);
+					}
+					else
+					{
+						glColor3ub( -sdf_render[(y*window_width)+x],255, 255);
+					}
 					glVertex2i(x,window_height-y);
 				}
 			}
@@ -1919,17 +1967,6 @@ int main()
 
 	// collisoion detection params
 	double cd_res = 0.10;
-
-
-
-	// // add line obstacles
-	// std::vector<line_obstacle> obs;
-	// line_obstacle line = line_obstacle(5,7,12,7);
-	// obs.push_back(line);
-	// line = line_obstacle(5,7,5,12);
-	// obs.push_back(line);
-	// line = line_obstacle(5,12, 12,7);
-	// obs.push_back(line);
 
 	// add closed obstacles
 	std::vector<closed_obstacle> obs;
