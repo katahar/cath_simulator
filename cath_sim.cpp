@@ -255,7 +255,7 @@ class render_entity
 		const int X = 0;
 		const int Y = 1;
 
-		double scale = 2; // pixels/sim unit
+		double scale = 5; // pixels/sim unit
 
 		// @TODO: modify to be able to shift view
 		void PhysicalCoordToScreenCoord(int &sx,int &sy,double px,double py)
@@ -1023,6 +1023,7 @@ class sdf2D: public render_entity
 
 			
 			// std::cout << "Sdf Width:  " << sdf_width << ", sdf height " << sdf_height <<std::endl;
+
 			for(int i = 0; i < 8; i++)
 			{
 				this->dist[i] = this->dist[i]*global_resolution;
