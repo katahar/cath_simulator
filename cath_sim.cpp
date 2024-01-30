@@ -255,7 +255,7 @@ class render_entity
 		const int X = 0;
 		const int Y = 1;
 
-		double scale = 10; // pixels/m
+		double scale = 2; // pixels/sim unit
 
 		// @TODO: modify to be able to shift view
 		void PhysicalCoordToScreenCoord(int &sx,int &sy,double px,double py)
@@ -465,7 +465,7 @@ class node: public render_entity
 			int sRad, sx, sy;
 			render_entity::PhysicalCoordToScreenDim(sRad, radius);
 			render_entity::PhysicalCoordToScreenCoord(sx,sy,pos.at(render_entity::X), pos.at(render_entity::Y));
-			render_entity::DrawCircle(sx,sy,sRad,true);
+			render_entity::DrawCircle(sx,sy,render_entity::scale*0.5,true);
 		}
 		// @TODO: String
 
@@ -1022,7 +1022,7 @@ class sdf2D: public render_entity
 			this->sdf_height = int(window_height/rend_resolution);
 
 			
-			std::cout << "Sdf Width:  " << sdf_width << ", sdf height " << sdf_height <<std::endl;
+			// std::cout << "Sdf Width:  " << sdf_width << ", sdf height " << sdf_height <<std::endl;
 			for(int i = 0; i < 8; i++)
 			{
 				this->dist[i] = this->dist[i]*global_resolution;
@@ -1064,11 +1064,18 @@ class sdf2D: public render_entity
 			this->sdf_height = int(window_height/rend_resolution);
 
 			
-			std::cout << "Sdf Width:  " << sdf_width << ", sdf height " << sdf_height <<std::endl;
+			std::cout << "\n\n\nSdf Width:  " << sdf_width << ", sdf height " << sdf_height <<std::endl;
 			for(int i = 0; i < 8; i++)
 			{
 				this->dist[i] = this->dist[i]*global_resolution;
 			}
+
+			std::cout << " ======= Scale Definitions =======" << std::endl;
+			std::cout << "window size: " << window_width/render_entity::scale << " x " << window_height/render_entity::scale << " sim units" <<  std::endl;
+			std::cout << "scale: " << render_entity::scale << " pixels / sim unit" << std::endl;
+			std::cout << "rendering resolution: " << rend_resolution << " pixels / sdf unit" << std::endl;
+			std::cout << "global resolution: " << 1/global_resolution << " sdf unit / sim units" << std::endl;
+			std::cout << "Each sim unit is 1 real mm. \n\n\n" << std::endl;
 
 
 			sdf = new double[sdf_width*sdf_height];
@@ -1080,30 +1087,28 @@ class sdf2D: public render_entity
 
 			fill_sdf(obstacles);
 
-			// h range 4-6
-			// v range 11 - 13
-			int x_low, x_high, y_low, y_high;
-			real_to_sdf(x_low, y_low, 4.8,6.5);
-			real_to_sdf(x_high, y_high, 5.5,7.25);
-
-			std::cout << "x window: " << x_low << ", " << x_high << "\t y window" << y_low << ", " << y_high << std::endl;
-
-			// print all values in sdf
-			for(int j = y_high; j > y_low; j--)
-			{
-				for(int i = x_low; i < x_high; i++)
-				{
-					if(get_sdf_val(i, j) != 0)
-					{
-						std::cout <<     printf("%.1f", get_sdf_val(i, j) )<< " " ;
-					}
-					else
-					{
-						std::cout <<     printf("*.*") << " " ;
-					}
-				}
-				std:: cout << "" << std::endl;
-			}
+			// // h range 4-6
+			// // v range 11 - 13
+			// int x_low, x_high, y_low, y_high;
+			// real_to_sdf(x_low, y_low, 4.8,6.5);
+			// real_to_sdf(x_high, y_high, 5.5,7.25);
+			// std::cout << "x window: " << x_low << ", " << x_high << "\t y window" << y_low << ", " << y_high << std::endl;
+			// // print all values in sdf
+			// for(int j = y_high; j > y_low; j--)
+			// {
+			// 	for(int i = x_low; i < x_high; i++)
+			// 	{
+			// 		if(get_sdf_val(i, j) != 0)
+			// 		{
+			// 			std::cout <<     printf("%.1f", get_sdf_val(i, j) )<< " " ;
+			// 		}
+			// 		else
+			// 		{
+			// 			std::cout <<     printf("*.*") << " " ;
+			// 		}
+			// 	}
+			// 	std:: cout << "" << std::endl;
+			// }
 			
 			std::cout << "SDF complete." << std::endl;
 		}
@@ -1613,22 +1618,6 @@ class collision_detector
 		// returns index of obstacle connecting with node. If no collision, returns -1 
 		int check_collision(node* nd)
 		{
-			// int ind = 0;
-			// for(auto iter = line_obs.begin(); iter != line_obs.end(); iter++)
-			// {
-			// 	if(true)
-			// 	// if( coarse_overlap(nd, (*iter)))
-			// 	{
-			// 		// std::cout << "coarse overlap detected!: (" << nd->get_pos(0) << ", " << nd->get_pos(1) << ") and line (" << (*iter).pos[0] << ", " <<  (*iter).pos[1] << ") -> (" << (*iter).pos[2] << ", " <<  (*iter).pos[3] << ")" << std::endl; 
-			// 		if(fine_overlap(nd))
-			// 		{
-			// 			std::cout << "fine overlap detected!" << std::endl;
-			// 			return ind;
-			// 		}
-			// 	};
-			// 	ind++;
-			// }
-			// return -1;
 
 			if(fine_overlap(nd))
 			{
@@ -1639,13 +1628,6 @@ class collision_detector
 
 		}
 
-		// // // returns a vector re
-		// vector get_constraint_vec(int index)
-		// {
-		// 	return obstacles[index].get_vec();	
-		// }
-
-		// returns approximation of obstacle norm at given point (pointing toward obstacle). Input is in global coordinates
 		vector get_obs_norm(double x_pos, double y_pos)
 		{
 			int x_sdf, y_sdf; 
@@ -1687,26 +1669,6 @@ class collision_detector
 
 
 	private:
-
-		// // retired
-		// bool coarse_overlap(node* nd, line_obstacle obstacle)
-		// {
-		// 	double nd_x_l = nd->get_pos().at(0) - nd->get_rad();
-		// 	double nd_x_r = nd->get_pos().at(0) + nd->get_rad();
-		// 	double nd_y_b = nd->get_pos().at(1) - nd->get_rad();
-		// 	double nd_y_t = nd->get_pos().at(1) + nd->get_rad();
-
-		// 	// AABB bounding box
-		// 	if(nd_x_l<obstacle.get_x_right() &&
-		// 		nd_x_r>obstacle.get_x_left() &&
-		// 		nd_y_b<obstacle.get_y_top() &&
-		// 		nd_y_t>obstacle.get_y_bot())
-		// 	{
-		// 		return true;
-		// 	}
-		// 	return false;
-
-		// }
 
 		bool fine_overlap(node* nd)
 		{
@@ -1939,45 +1901,37 @@ class catheter : public render_entity
 
 int main()
 {
-	// vector wall_vec (0.5,0.5);
-	// vector motion_up(0,1);
-	// vector motion_down(0,-1);
-	// vector motion_left(-1,0);
-	// vector motion_right(1,0);
-
-	// std::cout <<"Should not be able to move up or right." << std::endl;
-	// std::cout << "attempted up. Post constrint: " << motion_up.remove_component(wall_vec).to_string() << std::endl;
-	// std::cout << "attempted down. Post constrint: " << motion_down.remove_component(wall_vec).to_string() << std::endl;
-	// std::cout << "attempted left. Post constrint: " << motion_left.remove_component(wall_vec).to_string() << std::endl;
-	// std::cout << "attempted right. Post constrint: " << motion_right.remove_component(wall_vec).to_string() << std::endl;
-	
 	// in pixels
 	int window_width = 800;
 	int window_height = 600;
 
+
+	// assume that scale is at 1000 sim units = 1 "real" meter. 1 sim = 1 mm
+
+
 	// catheter params
-	double x_start = 1;
-	double y_start = 1;
+	double x_start = 40;
+	double y_start = 0.1;
 	double x_dir = 0;
 	double y_dir = 1;
-	double joint_dist = 1.5;
-	int num_segs = 2;
-	double node_rad = 0.25;
+	double joint_dist = 5;
+	int num_segs = 5;
+	double node_rad = 0.445/2;
 	double spring_const = 50;
 
 	// collisoion detection params
-	double cd_res = 0.10;
+	double cd_res = 0.25;
 
 	// add closed obstacles
 	std::vector<closed_obstacle> obs;
 	std::vector<vector> obs_corners;
-	obs_corners.emplace_back(5,7); 
-	obs_corners.emplace_back(12,7); 
-	obs_corners.emplace_back(5,12); 
+	obs_corners.emplace_back(5,10); 
+	obs_corners.emplace_back(35,10); 
+	obs_corners.emplace_back(5,45); 
 
 	closed_obstacle temp_obs = closed_obstacle(obs_corners);
 	obs.push_back(temp_obs);
-	obs.push_back(temp_obs.transform(vector(20,20)));
+	// obs.push_back(temp_obs.transform(vector(20,20)));
 
 	collision_detector cd(obs, window_width,window_height, cd_res, node_rad);
 
@@ -1992,7 +1946,7 @@ int main()
 
 	
 
-	double mv_vel = 0.5;
+	double mv_vel = 0.75;
 	double dt = 0.1;
 
 	bool show_sdf = false;
