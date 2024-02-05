@@ -9,7 +9,8 @@
 #include <queue>
 #include <chrono>
 #include <ctime>
-
+#include <fstream>
+#include <sstream>
 
 #include <iostream>
 #include "fssimplewindow.h"
@@ -363,6 +364,7 @@ class node: public render_entity
 
 		double mass;
 		bool fixed;
+		bool is_tip;
 
 		double radius;
 		std::vector<node*> connected_nodes;
@@ -1685,10 +1687,21 @@ class catheter : public render_entity
 {
 	public:
 		std::vector<node*> nodes;
+		std::vector<node*> tip_nodes;
 		int num_nodes;
+		int num_tip; //assumes that one is shared with the base catheter
 		collision_detector det;
 
 		node* base_node;
+
+		struct tip_config{ 
+			int rot_angle; //in degrees
+			std::vector<float> joint_distances;
+			std::vector<float> joint_angles;
+		};
+
+		int num_tip_configs;
+		std::vector<tip_config> tip_configs;
 
 		catheter(double x_origin, double y_origin, double x_dir, double y_dir, double joint_distance, int num_segments, double radius, double spring_const, collision_detector detector)
 		{
@@ -1701,7 +1714,7 @@ class catheter : public render_entity
 			double step_y = unit_y*joint_distance;
 
 			num_nodes = num_segments+1;
-			// double spring_const = 700;
+
 			//setting nodes
 			for(int i = 0; i < num_nodes; i++)
 			{
@@ -1730,6 +1743,9 @@ class catheter : public render_entity
 				std::cout << "node " << count << ": (" << (*iter)->get_pos((*iter)->X) << ", " << (*iter)->get_pos((*iter)->Y) << ")" << std::endl;
 				count++;
 			}
+			
+			// absorb into build_tip
+			build_tip(nodes[num_nodes-1]);
 
 			std::cout << "cath build complete " << std::endl;
 
@@ -1737,6 +1753,12 @@ class catheter : public render_entity
 
 		}
 
+		// end_base is the node where the tip will be attached.
+		void build_tip(node* end_base)
+		{
+			load_tip_configs("endpoints/endpoint_config.txt");
+
+		}
 
 		void move_input(double x, double y)
 		{
@@ -1856,24 +1878,6 @@ class catheter : public render_entity
 
 		}
 
-		~catheter()
-		{
-			// delete base_node;
-			base_node = nullptr;
-			for(int i = 0; i < nodes.size(); i++)
-			{
-				delete nodes[i];
-			}
-		}
-
-		void operator=(const catheter& input)
-		{
-			this->nodes = input.nodes;
-			this->num_nodes = input.num_nodes;
-			this->base_node = input.base_node;
-		}
-
-
 		void draw()
 		{
 			// draw node connections
@@ -1896,6 +1900,126 @@ class catheter : public render_entity
 			// std::cout << "All nodes  drawn" << std::endl;
 
 		}
+
+		void load_tip_configs(std::string file)
+		{
+			std::cout << "\n\nImporting tip configurations" << std::endl;
+			
+			FsChangeToProgramDir();
+
+			std::fstream tip_file;
+			tip_file.open(file, std::ios::in);
+			if(tip_file.is_open())
+			{
+				std::string line;
+				
+				// ignoring the first line
+				std::getline(tip_file, line);
+				
+				// getting the number of nodes in tip 
+				std::getline(tip_file, line);
+				num_tip= std::stoi(line);
+				std::cout << "Number of nodes in tip: " << num_tip << std::endl;
+
+				// Getting the number of configurations. Assumes that 180 degrees is covered.
+				std::getline(tip_file, line);
+				num_tip_configs= std::stoi(line);
+				std::cout << "Number of nodes in tip: " << num_tip_configs << std::endl;
+
+				for(int i = 0; i < num_tip_configs; i++)
+				{
+
+					// getting the angle
+					std::getline(tip_file, line);
+					int temp_angle = std::stoi(line);
+
+					// getting the distances
+					std::getline(tip_file, line);
+					std::vector<float> temp_distances = str_to_float_vec(line);
+					
+					// getting the angles
+					std::getline(tip_file, line);
+					std::vector<float> temp_angles= str_to_float_vec(line);
+					
+					// ignoring the blank line
+					std::getline(tip_file, line);
+
+					tip_config temp_config = {temp_angle, temp_distances, temp_angles};
+					tip_configs.push_back(temp_config);
+				}
+
+				tip_file.close();
+
+				std::cout << "Imported tip  configs: " << std::endl;
+				for(int i = 0; i < num_tip_configs; i++)
+				{
+					print_config(tip_configs[i]);
+				}
+			}
+			else
+			{
+				std::cout << "ERROR: Failed to open " << file << std::endl;
+			}
+
+		}
+
+		std::vector<float> str_to_float_vec(std::string input)
+		{
+			std::vector<float> vect;
+
+			std::stringstream ss(input);
+
+			float i;
+
+			while (ss >> i)
+			{
+				vect.push_back(i);
+
+				if (ss.peek() == ',')
+				ss.ignore();
+			}
+			return vect;
+		}
+
+		void print_config(tip_config input)
+		{
+			std::cout << "Rotation Angle: " << input.rot_angle << std::endl;
+			
+			std::cout << "\t Node Distances: ";
+			for(int i = 0; i < input.joint_distances.size(); i++)
+			{
+				std::cout << input.joint_distances[i] << ", ";
+			}
+			std::cout << ""<< std::endl;
+
+			std::cout << "\t joint angles: ";
+			for(int i = 0; i < input.joint_angles.size(); i++)
+			{
+				std::cout << input.joint_angles[i] << ", ";
+			}
+			std::cout << ""<< std::endl;
+		}
+
+
+		~catheter()
+		{
+			// delete base_node;
+			base_node = nullptr;
+			for(int i = 0; i < nodes.size(); i++)
+			{
+				delete nodes[i];
+			}
+		}
+
+		void operator=(const catheter& input)
+		{
+			this->nodes = input.nodes;
+			this->num_nodes = input.num_nodes;
+			this->base_node = input.base_node;
+		}
+
+
+		
 
 };
 
