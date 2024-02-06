@@ -459,6 +459,10 @@ class node: public render_entity
 			return current_angle;
 		}
 
+		double get_spring_const()
+		{
+			return this->spring_constant;
+		}
 
 		void draw()
 		{
@@ -674,6 +678,11 @@ class node: public render_entity
 		void apply_constraint(vector obstacle)
 		{
 			acc.remove_component(obstacle); //propegates to velocity
+		}
+
+		void update_neutral_angle(float new_angle)
+		{
+			this->neutral_angle = new_angle;
 		}
 
 		~node()
@@ -1686,18 +1695,18 @@ class collision_detector
 class catheter : public render_entity
 {
 	public:
-		std::vector<node*> nodes;
+		std::vector<node*> nodes; //include tip nodes
 		std::vector<node*> tip_nodes;
 		int num_nodes;
-		int num_tip; //assumes that one is shared with the base catheter
+		int num_tip_nodes; //assumes that one is shared with the base catheter
 		collision_detector det;
 
 		node* base_node;
 
 		struct tip_config{ 
 			int rot_angle; //in degrees
-			std::vector<float> joint_distances;
-			std::vector<float> joint_angles;
+			std::vector<double> joint_distances;
+			std::vector<double> joint_angles;
 		};
 
 		int num_tip_configs;
@@ -1732,11 +1741,9 @@ class catheter : public render_entity
 			for(int i = 1; i < num_nodes; i++)
 			{
 				nodes[i]->connect_node(nodes[i-1]);
-				
 			}
 
 			//reading nodes
-
 			int count = 0;
 			for(auto iter = nodes.begin(); iter != nodes.end(); iter++)
 			{
@@ -1753,10 +1760,67 @@ class catheter : public render_entity
 
 		}
 
-		// end_base is the node where the tip will be attached.
+		// end_base is the node where the tip will be attached. Assumes rotation angle is 0
 		void build_tip(node* end_base)
 		{
 			load_tip_configs("endpoints/endpoint_config.txt");
+
+			// adjusts the last base node's neutral angle
+			end_base->update_neutral_angle(tip_configs[0].joint_angles[0]);
+			tip_nodes.push_back(end_base);
+
+			std::cout << __LINE__ << std::endl;
+			for(int i = 1; i < num_tip_nodes-1; i++)
+			{
+				std::cout << __LINE__ << std::endl;
+				node* temp_node = new node(tip_nodes[i-1]->get_pos(0) + (tip_configs[0].joint_distances[i-1]*cos(tip_configs[0].joint_angles[i-1])), 
+											tip_nodes[i-1]->get_pos(1) + (tip_configs[0].joint_distances[i-1]*sin(tip_configs[0].joint_angles[i-1])), 
+											tip_nodes[i-1]->get_rad(), 
+											tip_configs[0].joint_angles[i], 
+											tip_nodes[i-1]->get_spring_const(), 
+											tip_configs[0].joint_distances[i]);
+				std::cout << __LINE__ << std::endl;
+				nodes.push_back(temp_node);
+				std::cout << __LINE__ << std::endl;
+				tip_nodes.push_back(temp_node);
+				std::cout << __LINE__ << std::endl;
+			}
+
+			// adding last node
+			node* temp_node = new node(tip_nodes[num_tip_nodes-2]->get_pos(0) + (tip_configs[0].joint_distances[num_tip_nodes-2]*cos(tip_configs[0].joint_angles[num_tip_nodes-2])), 
+											tip_nodes[num_tip_nodes-2]->get_pos(1) + (tip_configs[0].joint_distances[num_tip_nodes-2]*sin(tip_configs[0].joint_angles[num_tip_nodes-2])), 
+											tip_nodes[num_tip_nodes-2]->get_rad(), 
+											PI, 
+											tip_nodes[num_tip_nodes-2]->get_spring_const(), 
+											3);
+			std::cout << __LINE__ << std::endl;
+			nodes.push_back(temp_node);
+			std::cout << __LINE__ << std::endl;
+			tip_nodes.push_back(temp_node);
+			std::cout << __LINE__ << std::endl;
+
+			//connecting nodes
+			for(int i = 1; i < num_tip_nodes; i++)
+			{
+				std::cout << __LINE__ << std::endl;
+				tip_nodes[i]->connect_node(tip_nodes[i-1]);
+				std::cout << __LINE__ << std::endl;
+			}
+			
+			num_nodes+=num_tip_nodes-1;
+
+
+			//reading nodes
+			int count = 0;
+			for(auto iter = tip_nodes.begin(); iter != tip_nodes.end(); iter++)
+			{
+				std::cout << __LINE__ << std::endl;
+				std::cout << "tip node " << count << ": (" << (*iter)->get_pos((*iter)->X) << ", " << (*iter)->get_pos((*iter)->Y) << ")" << std::endl;
+				std::cout << __LINE__ << std::endl;
+				count++;
+			}
+			
+
 
 		}
 
@@ -1918,8 +1982,8 @@ class catheter : public render_entity
 				
 				// getting the number of nodes in tip 
 				std::getline(tip_file, line);
-				num_tip= std::stoi(line);
-				std::cout << "Number of nodes in tip: " << num_tip << std::endl;
+				num_tip_nodes= std::stoi(line);
+				std::cout << "Number of nodes in tip: " << num_tip_nodes << std::endl;
 
 				// Getting the number of configurations. Assumes that 180 degrees is covered.
 				std::getline(tip_file, line);
@@ -1935,11 +1999,11 @@ class catheter : public render_entity
 
 					// getting the distances
 					std::getline(tip_file, line);
-					std::vector<float> temp_distances = str_to_float_vec(line);
+					std::vector<double> temp_distances = str_to_vec(line);
 					
 					// getting the angles
 					std::getline(tip_file, line);
-					std::vector<float> temp_angles= str_to_float_vec(line);
+					std::vector<double> temp_angles= str_to_vec(line);
 					
 					// ignoring the blank line
 					std::getline(tip_file, line);
@@ -1963,9 +2027,9 @@ class catheter : public render_entity
 
 		}
 
-		std::vector<float> str_to_float_vec(std::string input)
+		std::vector<double> str_to_vec(std::string input)
 		{
-			std::vector<float> vect;
+			std::vector<double> vect;
 
 			std::stringstream ss(input);
 
@@ -2035,8 +2099,8 @@ int main()
 
 
 	// catheter params
-	double x_start = 40;
-	double y_start = 0.1;
+	double x_start = 50;
+	double y_start = 10;
 	double x_dir = 0;
 	double y_dir = 1;
 	double joint_dist = 5;
