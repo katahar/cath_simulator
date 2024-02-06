@@ -15,10 +15,11 @@
 #include <iostream>
 #include "fssimplewindow.h"
 // #include "Eigen/Core"
-// #include <Eigen3/Dense>
+#include <Eigen/Dense>
 
 
 #define PI 3.14159265
+
 class node;
 class joint;
 class collision_detector;
@@ -473,7 +474,6 @@ class node: public render_entity
 			render_entity::PhysicalCoordToScreenCoord(sx,sy,pos.at(render_entity::X), pos.at(render_entity::Y));
 			render_entity::DrawCircle(sx,sy,render_entity::scale*0.5,true);
 		}
-		// @TODO: String
 
 		// should only be used for anchor nodes
 		void move_rel_pos(double x, double y) //need to update to include z
@@ -2090,6 +2090,14 @@ class catheter : public render_entity
 
 int main()
 {
+	Eigen::MatrixXd m = Eigen::MatrixXd::Random(3,3);
+	m = (m + Eigen::MatrixXd::Constant(3,3,1.2)) * 50;
+	std::cout << "m =" << std::endl << m << std::endl;
+	Eigen::VectorXd v(3);
+	v << 1, 2, 3;
+	std::cout << "m * v =" << std::endl << m * v << std::endl;
+
+
 	// in pixels
 	int window_width = 800;
 	int window_height = 600;

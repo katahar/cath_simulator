@@ -3,13 +3,15 @@ project(Pac-Man)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_subdirectory(./fssimplewindow/src ${CMAKE_BINARY_DIR}/fssimplewindow)
+add_subdirectory(./ext-libs/fssimplewindow/src ${CMAKE_BINARY_DIR}/fssimplewindow)
 
+find_package(Eigen3 REQUIRED)
+include_directories(${EIGEN_INCLUDE_DIR})
 
 set(TARGET_NAME cath_sim)
 add_executable(${TARGET_NAME} MACOSX_BUNDLE cath_sim.cpp)
 
-target_link_libraries(${TARGET_NAME} fssimplewindow)
+target_link_libraries(${TARGET_NAME} fssimplewindow Eigen3::Eigen)
 
 set(DATA_SOURCE ${CMAKE_SOURCE_DIR}/sim_config)
 
