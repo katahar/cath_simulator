@@ -357,7 +357,7 @@ class node: public render_entity
 		double spring_constant = 20; 
 		double joint_distance = 0; //distance between two bodies. Body to joint "center" is joint_distance/2
 		double dist_tol = 0.05; //meters
-		double angle_tol = 2*PI/180; //meters
+		double angle_tol = (PI/180)*5; //degrees
 
 		vector pos;
 		vector vel = vector(0,0);
@@ -447,11 +447,25 @@ class node: public render_entity
 		{
 			if(!this->is_terminal())
 			{
+				// vector A_ = connected_nodes[0]->get_pos() - this->get_pos();
+				// vector B_ = connected_nodes[1]->get_pos() - this->get_pos();
+				// double numer = A_.dot(B_);
+				// double denom = A_.get_length() * B_.get_length();
+				// current_angle = acos(numer/denom);
+				// std::cout << "Old method: " << current_angle ; 
+
+
+
+				// https://stackoverflow.com/questions/21483999/using-atan2-to-find-angle-between-two-vectors/21486462#21486462
 				vector A = connected_nodes[0]->get_pos() - this->get_pos();
 				vector B = connected_nodes[1]->get_pos() - this->get_pos();
-				double numer = A.dot(B);
-				double denom = A.get_length() * B.get_length();
-				current_angle = acos(numer/denom);
+				current_angle = atan2(B.at(1), B.at(0))-atan2(A.at(1), A.at(0));
+				// normalize it to the range [0, 2 π):
+				if (current_angle < 0) {current_angle  += 2 *PI; }			
+				// std::cout << "new method: " << current_angle ; 
+
+
+				// // std::cout<< "Angle: " << current_angle<< std::endl;
 			}
 			else
 			{
@@ -511,13 +525,9 @@ class node: public render_entity
 		//updates velocity based on acceleration, then updates position based on velocity. Velocity always reset to 0
 		void move(double dt)
 		{
-			// vel[0] = vel[0]  + acc[0]*dt;
-			// vel[1] = vel[1]  + acc[1]*dt;
-			// pos[0] = pos[0]  + vel[0]*dt;
-			// pos[1] = pos[1]  + vel[1]*dt;
 			double damping = 5;
 			vel = vel + (acc*dt);
-			acc = acc - (vel*damping*dt);
+			acc = acc - (vel*damping*dt); 
 
 			vel = (acc*dt);
 			pos = pos + (vel*dt);
@@ -643,23 +653,25 @@ class node: public render_entity
 		{
 			if(!this->is_terminal())
 			{
-				// std::cout << "\tcurrent angle: " << current_angle << ", target angle: " << neutral_angle << std::endl;
+				std::cout << "\ttolerance: " << angle_tol << "  current angle: " << current_angle << ", target angle: " << neutral_angle << std::endl;
 			
 				// cmath uses radians.
 				if(abs(current_angle-neutral_angle) > angle_tol) //current_angle should have been updated in the reset function
 				{
 
 					node* move_node = this->get_other(last_node);
-					// std::cout << "\tenforcing angle. current difference is " << std::to_string(current_angle-neutral_angle);
+					// std::cout << "\tenforcing angle. current angle: " << current_angle << " difference " << std::to_string(current_angle-neutral_angle);
+					std::cout << " \tdifference " << std::to_string(current_angle-neutral_angle);
 					vector A = this->pos-last_node->get_pos();
 					vector B = move_node->get_pos() -this->pos;
 					vector force_dir = B.get_perpen_toward(A); //normalized direction of force
 					// std::cout << "\tforce direction " << force_dir.to_string();
 					// std::cout << "\tapplied acceleration " << (force_dir*(spring_constant*abs(current_angle-neutral_angle))).to_string() << std::endl;
 
+					std::cout << "\t Force magnitude: " << spring_constant*abs(current_angle-neutral_angle)*1 << std::endl;
 					// force = k*theta
-					move_node->add_accel(force_dir*(spring_constant*abs(current_angle-neutral_angle)));
-					// std::cout << "bending acceleration: " << move_node->get_acc().to_string() << std::endl;
+					move_node->add_accel(force_dir*(spring_constant*abs(current_angle-neutral_angle)*1));
+					std::cout << "\t\tbending acceleration: " << move_node->get_acc().to_string() << std::endl;
 					
 					//              move_node
 					//                 /
@@ -1751,8 +1763,9 @@ class catheter : public render_entity
 				count++;
 			}
 			
-			// absorb into build_tip
-			build_tip(nodes[num_nodes-1]);
+			
+			
+			// build_tip(nodes[num_nodes-1]);
 
 			std::cout << "cath build complete " << std::endl;
 
@@ -1769,21 +1782,21 @@ class catheter : public render_entity
 			end_base->update_neutral_angle(tip_configs[0].joint_angles[0]);
 			tip_nodes.push_back(end_base);
 
-			std::cout << __LINE__ << std::endl;
+			// std::cout << __LINE__ << std::endl;
 			for(int i = 1; i < num_tip_nodes-1; i++)
 			{
-				std::cout << __LINE__ << std::endl;
+				// std::cout << __LINE__ << std::endl;
 				node* temp_node = new node(tip_nodes[i-1]->get_pos(0) + (tip_configs[0].joint_distances[i-1]*cos(tip_configs[0].joint_angles[i-1])), 
 											tip_nodes[i-1]->get_pos(1) + (tip_configs[0].joint_distances[i-1]*sin(tip_configs[0].joint_angles[i-1])), 
 											tip_nodes[i-1]->get_rad(), 
 											tip_configs[0].joint_angles[i], 
 											tip_nodes[i-1]->get_spring_const(), 
 											tip_configs[0].joint_distances[i]);
-				std::cout << __LINE__ << std::endl;
+				// std::cout << __LINE__ << std::endl;
 				nodes.push_back(temp_node);
-				std::cout << __LINE__ << std::endl;
+				// std::cout << __LINE__ << std::endl;
 				tip_nodes.push_back(temp_node);
-				std::cout << __LINE__ << std::endl;
+				// std::cout << __LINE__ << std::endl;
 			}
 
 			// adding last node
@@ -1793,18 +1806,18 @@ class catheter : public render_entity
 											PI, 
 											tip_nodes[num_tip_nodes-2]->get_spring_const(), 
 											3);
-			std::cout << __LINE__ << std::endl;
+			// std::cout << __LINE__ << std::endl;
 			nodes.push_back(temp_node);
-			std::cout << __LINE__ << std::endl;
+			// std::cout << __LINE__ << std::endl;
 			tip_nodes.push_back(temp_node);
-			std::cout << __LINE__ << std::endl;
+			// std::cout << __LINE__ << std::endl;
 
 			//connecting nodes
 			for(int i = 1; i < num_tip_nodes; i++)
 			{
-				std::cout << __LINE__ << std::endl;
+				// std::cout << __LINE__ << std::endl;
 				tip_nodes[i]->connect_node(tip_nodes[i-1]);
-				std::cout << __LINE__ << std::endl;
+				// std::cout << __LINE__ << std::endl;
 			}
 			
 			num_nodes+=num_tip_nodes-1;
@@ -1814,9 +1827,9 @@ class catheter : public render_entity
 			int count = 0;
 			for(auto iter = tip_nodes.begin(); iter != tip_nodes.end(); iter++)
 			{
-				std::cout << __LINE__ << std::endl;
+				// std::cout << __LINE__ << std::endl;
 				std::cout << "tip node " << count << ": (" << (*iter)->get_pos((*iter)->X) << ", " << (*iter)->get_pos((*iter)->Y) << ")" << std::endl;
-				std::cout << __LINE__ << std::endl;
+				// std::cout << __LINE__ << std::endl;
 				count++;
 			}
 			
@@ -2090,12 +2103,12 @@ class catheter : public render_entity
 
 int main()
 {
-	Eigen::MatrixXd m = Eigen::MatrixXd::Random(3,3);
-	m = (m + Eigen::MatrixXd::Constant(3,3,1.2)) * 50;
-	std::cout << "m =" << std::endl << m << std::endl;
-	Eigen::VectorXd v(3);
-	v << 1, 2, 3;
-	std::cout << "m * v =" << std::endl << m * v << std::endl;
+	// Eigen::MatrixXd m = Eigen::MatrixXd::Random(3,3);
+	// m = (m + Eigen::MatrixXd::Constant(3,3,1.2)) * 50;
+	// std::cout << "m =" << std::endl << m << std::endl;
+	// Eigen::VectorXd v(3);
+	// v << 1, 2, 3;
+	// std::cout << "m * v =" << std::endl << m * v << std::endl;
 
 
 	// in pixels
@@ -2112,7 +2125,7 @@ int main()
 	double x_dir = 0;
 	double y_dir = 1;
 	double joint_dist = 5;
-	int num_segs = 5;
+	int num_segs = 4;
 	double node_rad = 0.445/2;
 	double spring_const = 50;
 
