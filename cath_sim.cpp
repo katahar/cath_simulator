@@ -134,6 +134,13 @@ class vector
 			return ret_vec;
 		}
 
+		// assumes radians
+		vector rotate(double angle)
+		{
+			vector ret_vec = vector( (this->at(0)*cos(angle)) - this->at(1)*sin(angle), (this->at(0)*sin(angle)) + this->at(1)*cos(angle));
+			return ret_vec;
+		}
+
 		//returns a vector where input component (eg. wall NOT-normal) is removed from this vector (eg velocity)
 		vector remove_component(vector input_vec)
 		{
@@ -356,7 +363,7 @@ class node: public render_entity
 		double spring_constant = 20; 
 		double joint_distance = 0; //distance between two bodies. Body to joint "center" is joint_distance/2
 		double dist_tol = 0.05; //meters
-		double angle_tol = (PI/180)*5; //degrees
+		double angle_tol = (PI/180)*1; //degrees
 
 		vector pos;
 		vector vel = vector(0,0);
@@ -370,10 +377,11 @@ class node: public render_entity
 		std::vector<node*> connected_nodes;
 
 
-		node(double x, double y, double radius, double neutral_angle, double spring_const, double joint_dist)
+		node(double x, double y, double radius, double neutral_angle, double spring_const, double joint_dist, bool is_tip = false)
 		{
 			pos = vector(x,y);
 			// pos[0] = x;
+			this->is_tip = is_tip;
 			this->radius = radius;
 			this->neutral_angle = neutral_angle;
 			this->spring_constant = spring_const;
@@ -480,7 +488,14 @@ class node: public render_entity
 
 		void draw()
 		{
-			glColor3ub(255,0,0);
+			if(this->is_tip)
+			{
+				glColor3ub(235,140,52);
+			}
+			else
+			{
+				glColor3ub(255,0,0);
+			}
 
 			int sRad, sx, sy;
 			render_entity::PhysicalCoordToScreenDim(sRad, radius);
@@ -652,7 +667,8 @@ class node: public render_entity
 		{
 			if(!this->is_terminal())
 			{
-				std::cout << "\ttolerance: " << angle_tol << "  current angle: " << current_angle << ", target angle: " << neutral_angle << std::endl;
+				if(this->is_tip)
+				{std::cout << "\ttolerance: " << angle_tol << "  current angle: " << current_angle << ", target angle: " << neutral_angle << std::endl;}
 			
 				// cmath uses radians.
 				if(abs(current_angle-neutral_angle) > angle_tol) //current_angle should have been updated in the reset function
@@ -660,22 +676,26 @@ class node: public render_entity
 
 					node* move_node = this->get_other(last_node);
 					// std::cout << "\tenforcing angle. current angle: " << current_angle << " difference " << std::to_string(current_angle-neutral_angle);
-					std::cout << " \tdifference " << std::to_string(current_angle-neutral_angle);
-					vector A = this->pos-last_node->get_pos();
+					// std::cout << " \tdifference " << std::to_string(current_angle-neutral_angle);
+					vector A = last_node->get_pos()-this->pos;
+					
+					// A_rot is vector A rotated by the target angle, which is the goal configuration of move_node
+					vector A_rot = A.rotate(neutral_angle);
+					
 					vector B = move_node->get_pos() -this->pos;
-					vector force_dir = B.get_perpen_toward(A); //normalized direction of force
+					vector force_dir = B.get_perpen_toward(A_rot); //normalized direction of force
 					// std::cout << "\tforce direction " << force_dir.to_string();
 					// std::cout << "\tapplied acceleration " << (force_dir*(spring_constant*abs(current_angle-neutral_angle))).to_string() << std::endl;
 
-					std::cout << "\t Force magnitude: " << spring_constant*abs(current_angle-neutral_angle)*1 << std::endl;
+					// std::cout << "\t Force magnitude: " << spring_constant*abs(current_angle-neutral_angle)*1 << std::endl;
 					// force = k*theta
 					move_node->add_accel(force_dir*(spring_constant*abs(current_angle-neutral_angle)*1));
-					std::cout << "\t\tbending acceleration: " << move_node->get_acc().to_string() << std::endl;
+					// std::cout << "\t\tbending acceleration: " << move_node->get_acc().to_string() << std::endl;
 					
 					//              move_node
-					//                 /
-					//                /   vector B
-					//               /
+					//         \        /
+					//   A_rot  \     /   vector B
+					//           \   /
 					//            this node 
 					//              |
 					//              |    vector A
@@ -1779,6 +1799,7 @@ class catheter : public render_entity
 
 			// adjusts the last base node's neutral angle
 			end_base->update_neutral_angle(tip_configs[0].joint_angles[0]);
+			end_base->is_tip = true;
 			tip_nodes.push_back(end_base);
 
 			// std::cout << __LINE__ << std::endl;
@@ -1790,7 +1811,8 @@ class catheter : public render_entity
 											tip_nodes[i-1]->get_rad(), 
 											tip_configs[0].joint_angles[i], 
 											tip_nodes[i-1]->get_spring_const(), 
-											tip_configs[0].joint_distances[i]);
+											tip_configs[0].joint_distances[i], 
+											true);
 				// std::cout << __LINE__ << std::endl;
 				nodes.push_back(temp_node);
 				// std::cout << __LINE__ << std::endl;
@@ -1804,7 +1826,8 @@ class catheter : public render_entity
 											tip_nodes[num_tip_nodes-2]->get_rad(), 
 											PI, 
 											tip_nodes[num_tip_nodes-2]->get_spring_const(), 
-											3);
+											3, 
+											true);
 			// std::cout << __LINE__ << std::endl;
 			nodes.push_back(temp_node);
 			// std::cout << __LINE__ << std::endl;
