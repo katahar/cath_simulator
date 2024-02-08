@@ -14,7 +14,6 @@
 
 #include <iostream>
 #include "fssimplewindow.h"
-// #include "Eigen/Core"
 #include <Eigen/Dense>
 
 
@@ -1765,7 +1764,7 @@ class catheter : public render_entity
 			
 			
 			
-			// build_tip(nodes[num_nodes-1]);
+			build_tip(nodes[num_nodes-1]);
 
 			std::cout << "cath build complete " << std::endl;
 
