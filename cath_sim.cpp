@@ -667,8 +667,8 @@ class node: public render_entity
 		{
 			if(!this->is_terminal())
 			{
-				if(this->is_tip)
-				{std::cout << "\ttolerance: " << angle_tol << "  current angle: " << current_angle << ", target angle: " << neutral_angle << std::endl;}
+				// if(this->is_tip)
+				// {std::cout << "\ttolerance: " << angle_tol << "  current angle: " << current_angle << ", target angle: " << neutral_angle << std::endl;}
 			
 				// cmath uses radians.
 				if(abs(current_angle-neutral_angle) > angle_tol) //current_angle should have been updated in the reset function
@@ -714,6 +714,11 @@ class node: public render_entity
 		void update_neutral_angle(float new_angle)
 		{
 			this->neutral_angle = new_angle;
+		}
+		
+		void update_joint_dist(double new_dist)
+		{
+			this->joint_distance = new_dist;
 		}
 
 		~node()
@@ -1726,6 +1731,9 @@ class collision_detector
 class catheter : public render_entity
 {
 	public:
+		static const int CW = 3;
+		static const int CCW  = 4;
+
 		std::vector<node*> nodes; //include tip nodes
 		std::vector<node*> tip_nodes;
 		int num_nodes;
@@ -1742,6 +1750,8 @@ class catheter : public render_entity
 
 		int num_tip_configs;
 		std::vector<tip_config> tip_configs;
+
+		int tip_config_ind;
 
 		catheter(double x_origin, double y_origin, double x_dir, double y_dir, double joint_distance, int num_segments, double radius, double spring_const, collision_detector detector)
 		{
@@ -1797,8 +1807,10 @@ class catheter : public render_entity
 		{
 			load_tip_configs("endpoints/endpoint_config.txt");
 
+			tip_config_ind = 0;
+
 			// adjusts the last base node's neutral angle
-			end_base->update_neutral_angle(tip_configs[0].joint_angles[0]);
+			end_base->update_neutral_angle(tip_configs[tip_config_ind].joint_angles[0]);
 			end_base->is_tip = true;
 			tip_nodes.push_back(end_base);
 
@@ -1806,12 +1818,12 @@ class catheter : public render_entity
 			for(int i = 1; i < num_tip_nodes-1; i++)
 			{
 				// std::cout << __LINE__ << std::endl;
-				node* temp_node = new node(tip_nodes[i-1]->get_pos(0) + (tip_configs[0].joint_distances[i-1]*cos(tip_configs[0].joint_angles[i-1])), 
-											tip_nodes[i-1]->get_pos(1) + (tip_configs[0].joint_distances[i-1]*sin(tip_configs[0].joint_angles[i-1])), 
+				node* temp_node = new node(tip_nodes[i-1]->get_pos(0) + (tip_configs[tip_config_ind].joint_distances[i-1]*cos(tip_configs[tip_config_ind].joint_angles[i-1])), 
+											tip_nodes[i-1]->get_pos(1) + (tip_configs[tip_config_ind].joint_distances[i-1]*sin(tip_configs[tip_config_ind].joint_angles[i-1])), 
 											tip_nodes[i-1]->get_rad(), 
-											tip_configs[0].joint_angles[i], 
+											tip_configs[tip_config_ind].joint_angles[i], 
 											tip_nodes[i-1]->get_spring_const(), 
-											tip_configs[0].joint_distances[i], 
+											tip_configs[tip_config_ind].joint_distances[i], 
 											true);
 				// std::cout << __LINE__ << std::endl;
 				nodes.push_back(temp_node);
@@ -1821,8 +1833,8 @@ class catheter : public render_entity
 			}
 
 			// adding last node
-			node* temp_node = new node(tip_nodes[num_tip_nodes-2]->get_pos(0) + (tip_configs[0].joint_distances[num_tip_nodes-2]*cos(tip_configs[0].joint_angles[num_tip_nodes-2])), 
-											tip_nodes[num_tip_nodes-2]->get_pos(1) + (tip_configs[0].joint_distances[num_tip_nodes-2]*sin(tip_configs[0].joint_angles[num_tip_nodes-2])), 
+			node* temp_node = new node(tip_nodes[num_tip_nodes-2]->get_pos(0) + (tip_configs[tip_config_ind].joint_distances[num_tip_nodes-2]*cos(tip_configs[tip_config_ind].joint_angles[num_tip_nodes-2])), 
+											tip_nodes[num_tip_nodes-2]->get_pos(1) + (tip_configs[tip_config_ind].joint_distances[num_tip_nodes-2]*sin(tip_configs[tip_config_ind].joint_angles[num_tip_nodes-2])), 
 											tip_nodes[num_tip_nodes-2]->get_rad(), 
 											PI, 
 											tip_nodes[num_tip_nodes-2]->get_spring_const(), 
@@ -1856,6 +1868,53 @@ class catheter : public render_entity
 			}
 			
 
+		}
+
+		// updates tip_config_ind index and returns the associated configuration
+		tip_config get_config(int direction )
+		{
+			// assumes we always have configurations 0-180
+			if(CCW == direction)
+			{
+				tip_config_ind++;
+				if(tip_config_ind > num_tip_configs-1)
+				{
+					tip_config_ind = 0;
+				}
+			}
+			else if(CW == direction)
+			{
+				tip_config_ind--;
+				if(tip_config_ind < 0)
+				{
+					tip_config_ind = num_tip_configs-1;
+				}
+			}
+			else
+			{
+				std::cout << "ERROR: Invalid applied direction" << std::endl;
+			}
+
+			return tip_configs[tip_config_ind];
+
+		}
+
+
+		// Use catheter::CW or catheter::CCW as input
+		void rotate_tip(int direction)
+		{
+			// getting the updated configuration after rotating
+			tip_config temp_config = get_config(direction);
+
+			// std::cout << "Tip nodes: " << num_tip_nodes << std::endl;
+			// print_config(temp_config);
+
+			std::cout << "Rotating to " << temp_config.rot_angle << std::endl;
+			for(int i = 0; i < num_tip_nodes-1; i++)
+			{
+				tip_nodes[i]->update_neutral_angle(temp_config.joint_angles[i]);
+				tip_nodes[i]->update_joint_dist(temp_config.joint_distances[i]);
+			}
 
 		}
 
@@ -2200,6 +2259,12 @@ int main()
             break;
         case FSKEY_RIGHT:
 			cath.move_input( mv_vel*dt, 0);
+            break;
+		case FSKEY_A:
+			cath.rotate_tip( catheter::CCW);
+            break;
+		case FSKEY_D:
+			cath.rotate_tip( catheter::CW);
             break;
 		case FSKEY_Q:
 			// show SDF
