@@ -23,6 +23,7 @@ class node;
 class joint;
 class collision_detector;
 class catheter;
+class environment;
 
 class vector
 {
@@ -265,6 +266,30 @@ class render_entity
 
 		double scale = 5; // pixels/sim unit
 
+		// @TODO: Add x rendering criteria too
+		// prevents crashing when moving vertically offscreen.
+		bool on_screen(double px, double py)
+		{
+			int sx, sy;
+			PhysicalCoordToScreenCoord(sx,sy,px,py);
+			if(sy<=600 && sy>=0)
+			{
+				return true;
+			}
+			return false;
+		}
+
+		bool on_screen(int sx, int sy)
+		{
+			if(sy<=600 && sy>=0)
+			{
+				return true;
+			}
+			return false;
+		}
+
+
+
 		// @TODO: modify to be able to shift view
 		void PhysicalCoordToScreenCoord(int &sx,int &sy,double px,double py)
 		{
@@ -279,76 +304,89 @@ class render_entity
 		
 
 		void DrawCircle(int cx,int cy,int rad,int fill)
-		{
+		{		
 			const double YS_PI=3.1415927;
-
-			if(0!=fill)
+			if(on_screen(cx,cy))
 			{
-				glBegin(GL_POLYGON);
+				if(0!=fill)
+				{
+					glBegin(GL_POLYGON);
+				}
+				else
+				{
+					glBegin(GL_LINE_LOOP);
+				}
+
+				int i;
+				for(i=0; i<64; i++)
+				{
+					double angle=(double)i*YS_PI/32.0;
+					double x=(double)cx+cos(angle)*(double)rad;
+					double y=(double)cy+sin(angle)*(double)rad;
+					if(on_screen(int(x),int(y)))
+					{
+						glVertex2d(x,y);
+					}
+				}
+
+				glEnd();
 			}
 			else
 			{
-				glBegin(GL_LINE_LOOP);
+				std::cout << "CENTER OFF SCREEN" <<std::endl;
 			}
-
-			int i;
-			for(i=0; i<64; i++)
-			{
-				double angle=(double)i*YS_PI/32.0;
-				double x=(double)cx+cos(angle)*(double)rad;
-				double y=(double)cy+sin(angle)*(double)rad;
-				glVertex2d(x,y);
-			}
-
-			glEnd();
 		}
 
-		void DrawRect(int x1,int y1,int x2,int y2,int fill)
-		{
-			if(0!=fill)
-			{
-				glBegin(GL_QUADS);
-			}
-			else
-			{
-				glBegin(GL_LINE_LOOP);
-			}
+		// void DrawRect(int x1,int y1,int x2,int y2,int fill)
+		// {
+		// 	if(0!=fill)
+		// 	{
+		// 		glBegin(GL_QUADS);
+		// 	}
+		// 	else
+		// 	{
+		// 		glBegin(GL_LINE_LOOP);
+		// 	}
 
-			glVertex2i(x1,y1);
-			glVertex2i(x2,y1);
-			glVertex2i(x2,y2);
-			glVertex2i(x1,y2);
+		// 	glVertex2i(x1,y1);
+		// 	glVertex2i(x2,y1);
+		// 	glVertex2i(x2,y2);
+		// 	glVertex2i(x1,y2);
 
-			glEnd();
-		}
+		// 	glEnd();
+		// }
 
 		void  DrawLine(int x1,int y1,int x2,int y2)
 		{
-			glBegin(GL_LINES);
+			if(on_screen(x1,y1) && on_screen(x2,y2))
+			{
+				glBegin(GL_LINES);
 
-			glVertex2i(x1,y1);
-			glVertex2i(x2,y2);
+				glVertex2i(x1,y1);
+				glVertex2i(x2,y2);
 
-			glEnd();
+				glEnd();
+				
+			}
 		}
 
-		void DrawLineThick(int x1,int y1,int x2,int y2, int thickness)
-		{
-			int x_bl = x1-(thickness/2);
-			int x_br = x1+(thickness/2);
-			int x_tl = x2-(thickness/2);
-			int x_tr = x2+(thickness/2);
-			int y_t = y2;
-			int y_b = y1;
-			glBegin(GL_QUADS);
-			glVertex2i(x_tl,y_t);
-			glVertex2i(x_tr,y_t);
-			glVertex2i(x_br,y_b);
-			glVertex2i(x_bl,y_b);
+		// void DrawLineThick(int x1,int y1,int x2,int y2, int thickness)
+		// {
+		// 	int x_bl = x1-(thickness/2);
+		// 	int x_br = x1+(thickness/2);
+		// 	int x_tl = x2-(thickness/2);
+		// 	int x_tr = x2+(thickness/2);
+		// 	int y_t = y2;
+		// 	int y_b = y1;
+		// 	glBegin(GL_QUADS);
+		// 	glVertex2i(x_tl,y_t);
+		// 	glVertex2i(x_tr,y_t);
+		// 	glVertex2i(x_br,y_b);
+		// 	glVertex2i(x_bl,y_b);
 
-			glEnd();
+		// 	glEnd();
 
-		}
+		// }
 };
 
 
@@ -454,15 +492,6 @@ class node: public render_entity
 		{
 			if(!this->is_terminal())
 			{
-				// vector A_ = connected_nodes[0]->get_pos() - this->get_pos();
-				// vector B_ = connected_nodes[1]->get_pos() - this->get_pos();
-				// double numer = A_.dot(B_);
-				// double denom = A_.get_length() * B_.get_length();
-				// current_angle = acos(numer/denom);
-				// std::cout << "Old method: " << current_angle ; 
-
-
-
 				// https://stackoverflow.com/questions/21483999/using-atan2-to-find-angle-between-two-vectors/21486462#21486462
 				vector A = connected_nodes[0]->get_pos() - this->get_pos();
 				vector B = connected_nodes[1]->get_pos() - this->get_pos();
@@ -813,6 +842,13 @@ class line_obstacle: public render_entity
 			copy(input);
 		}
 		
+		std::string to_string()
+		{
+			std::string str = "(" + std::to_string(pos[0]) + ", " + std::to_string(pos[1]) + ") ->" + "(" + std::to_string(pos[2]) + ", " + std::to_string(pos[3]) + ")";
+			return str;
+		}
+
+
 		private:
 			void copy(const line_obstacle &input)
 			{
@@ -921,6 +957,17 @@ class closed_obstacle
 			{
 				ln.draw();
 			}
+		}
+
+		std::string to_string()
+		{
+			std::string str = "line obstacle: ";
+			for(line_obstacle ln:lines)
+			{
+				str = str + "\n\t\t" + ln.to_string();
+			}
+			return str;
+
 		}
 
 	private:
@@ -1629,6 +1676,124 @@ class sdf2D: public render_entity
 
 };
 
+
+class environment
+{
+
+	public: 
+		std::vector<closed_obstacle> obs;
+
+		environment(std::string obs_file)
+		{
+			obs = import_obstacles(obs_file);
+		}
+
+		environment(const environment &incoming)
+		{
+			this->copy(incoming);
+		}
+
+		std::vector<closed_obstacle> get_obs()
+		{
+			return obs;
+		}
+
+
+		std::vector<closed_obstacle> import_obstacles(std::string file)
+		{
+			std::cout << "\n\nImporting environment" << std::endl;
+
+			FsChangeToProgramDir();
+
+			std::fstream obs_file;
+			obs_file.open(file, std::ios::in);
+			
+			if(obs_file.is_open())
+			{
+				std::string line;
+				
+				// ignoring the first line
+				std::getline(obs_file, line);
+				
+				// getting the number of nodes in tip 
+				std::getline(obs_file, line);
+				int num_obstacles= std::stoi(line);
+				std::cout << "Number of obstacles (triangles) file: " << num_obstacles << std::endl;
+
+				// blank line
+				std::getline(obs_file, line);
+
+				std::cout << "Number of nodes in tip: " << num_obstacles << std::endl;
+
+				for(int i = 0; i < num_obstacles; i++)
+				{
+					std::vector<vector> obs_corners;
+					
+					// each corner
+					for(int j = 0; j < 3; j++)
+					{
+						// converts line to std::vector, represents the coordinate of a corner
+						std::getline(obs_file, line);
+						std::vector<double> temp_coord = str_to_vec(line);
+						obs_corners.emplace_back(temp_coord[0], temp_coord[1]); 
+					}
+					// skip empty line
+					std::getline(obs_file, line);
+
+					// corners to a closed obstacle
+					closed_obstacle temp_obs = closed_obstacle(obs_corners);
+					obs.push_back(temp_obs);
+					
+				}
+
+				obs_file.close();
+
+				std::cout << "Imported obstacles: " << std::endl;
+				for(int i = 0; i < num_obstacles; i++)
+				{
+					std::cout << "\t" << (obs[i].to_string()) << std::endl;
+				}
+			}
+			else
+			{
+				std::cout << "ERROR: Failed to open " << file << std::endl;
+			}
+
+			return obs;
+		}
+
+		std::vector<double> str_to_vec(std::string input)
+		{
+			std::vector<double> vect;
+
+			std::stringstream ss(input);
+
+			float i;
+
+			while (ss >> i)
+			{
+				vect.push_back(i);
+
+				if (ss.peek() == ',')
+				ss.ignore();
+			}
+			return vect;
+		}
+
+	private:
+		void copy(const environment &incoming)
+		{
+			this->obs = incoming.obs;
+		}
+
+		void operator=(const environment &incoming)
+		{
+			this->copy(incoming);
+		}
+
+};
+
+
 class collision_detector
 {
 	public: 
@@ -1714,7 +1879,7 @@ class collision_detector
 
 		}
 
-
+		
 
 	private:
 
@@ -1814,10 +1979,8 @@ class catheter : public render_entity
 			end_base->is_tip = true;
 			tip_nodes.push_back(end_base);
 
-			// std::cout << __LINE__ << std::endl;
 			for(int i = 1; i < num_tip_nodes-1; i++)
 			{
-				// std::cout << __LINE__ << std::endl;
 				node* temp_node = new node(tip_nodes[i-1]->get_pos(0) + (tip_configs[tip_config_ind].joint_distances[i-1]*cos(tip_configs[tip_config_ind].joint_angles[i-1])), 
 											tip_nodes[i-1]->get_pos(1) + (tip_configs[tip_config_ind].joint_distances[i-1]*sin(tip_configs[tip_config_ind].joint_angles[i-1])), 
 											tip_nodes[i-1]->get_rad(), 
@@ -1825,11 +1988,8 @@ class catheter : public render_entity
 											tip_nodes[i-1]->get_spring_const(), 
 											tip_configs[tip_config_ind].joint_distances[i], 
 											true);
-				// std::cout << __LINE__ << std::endl;
 				nodes.push_back(temp_node);
-				// std::cout << __LINE__ << std::endl;
 				tip_nodes.push_back(temp_node);
-				// std::cout << __LINE__ << std::endl;
 			}
 
 			// adding last node
@@ -1840,18 +2000,13 @@ class catheter : public render_entity
 											tip_nodes[num_tip_nodes-2]->get_spring_const(), 
 											3, 
 											true);
-			// std::cout << __LINE__ << std::endl;
 			nodes.push_back(temp_node);
-			// std::cout << __LINE__ << std::endl;
 			tip_nodes.push_back(temp_node);
-			// std::cout << __LINE__ << std::endl;
 
 			//connecting nodes
 			for(int i = 1; i < num_tip_nodes; i++)
 			{
-				// std::cout << __LINE__ << std::endl;
 				tip_nodes[i]->connect_node(tip_nodes[i-1]);
-				// std::cout << __LINE__ << std::endl;
 			}
 			
 			num_nodes+=num_tip_nodes-1;
@@ -1861,9 +2016,7 @@ class catheter : public render_entity
 			int count = 0;
 			for(auto iter = tip_nodes.begin(); iter != tip_nodes.end(); iter++)
 			{
-				// std::cout << __LINE__ << std::endl;
 				std::cout << "tip node " << count << ": (" << (*iter)->get_pos((*iter)->X) << ", " << (*iter)->get_pos((*iter)->Y) << ")" << std::endl;
-				// std::cout << __LINE__ << std::endl;
 				count++;
 			}
 			
@@ -2184,52 +2337,73 @@ class catheter : public render_entity
 
 int main()
 {
-	// Eigen::MatrixXd m = Eigen::MatrixXd::Random(3,3);
-	// m = (m + Eigen::MatrixXd::Constant(3,3,1.2)) * 50;
-	// std::cout << "m =" << std::endl << m << std::endl;
-	// Eigen::VectorXd v(3);
-	// v << 1, 2, 3;
-	// std::cout << "m * v =" << std::endl << m * v << std::endl;
-
-
 	// in pixels
 	int window_width = 800;
 	int window_height = 600;
 
-
 	// assume that scale is at 1000 sim units = 1 "real" meter. 1 sim = 1 mm
 
-
 	// catheter params
-	double x_start = 50;
-	double y_start = 10;
-	double x_dir = 0;
-	double y_dir = 1;
-	double joint_dist = 5;
-	int num_segs = 4;
+	double x_start = 10;
+	double y_start = 50;
+	double x_dir = 1;
+	double y_dir = 0;
+	double joint_dist = 1.5;
+	int num_segs = 20;
 	double node_rad = 0.445/2;
 	double spring_const = 50;
 
 	// collisoion detection params
 	double cd_res = 0.25;
 
-	// add closed obstacles
-	std::vector<closed_obstacle> obs;
-	std::vector<vector> obs_corners;
-	obs_corners.emplace_back(5,10); 
-	obs_corners.emplace_back(35,10); 
-	obs_corners.emplace_back(5,45); 
+	// // add closed obstacles
+	// std::vector<vector> obs_corners1;
+	// obs_corners1.emplace_back(60,60); 
+	// obs_corners1.emplace_back(70,60); 
+	// obs_corners1.emplace_back(70,45); 
 
-	closed_obstacle temp_obs = closed_obstacle(obs_corners);
-	obs.push_back(temp_obs);
+
+	// std::vector<vector> obs_corners2;
+	// obs_corners2.emplace_back(20,40); 
+	// obs_corners2.emplace_back(100,40); 
+	// obs_corners2.emplace_back(100,20); 
+	// obs_corners2.emplace_back(20,20); 
+
+	// std::vector<vector> obs_corners3;
+	// obs_corners3.emplace_back(80,40); 
+	// obs_corners3.emplace_back(90,40); 
+	// obs_corners3.emplace_back(90,50); 
+
+	// std::vector<vector> obs_corners4;
+	// obs_corners4.emplace_back(20,60); 
+	// obs_corners4.emplace_back(100,60); 
+	// obs_corners4.emplace_back(100,90); 
+	// obs_corners4.emplace_back(20,90); 
+
+	// closed_obstacle temp_obs = closed_obstacle(obs_corners1);
+	// obs.push_back(temp_obs);
+	// temp_obs = closed_obstacle(obs_corners2);
+	// obs.push_back(temp_obs);
+	// temp_obs = closed_obstacle(obs_corners3);
+	// obs.push_back(temp_obs);
+	// temp_obs = closed_obstacle(obs_corners4);
+	// obs.push_back(temp_obs);
 	// obs.push_back(temp_obs.transform(vector(20,20)));
+
+	environment env = environment("environments/simple_environment.txt");
+	std::vector<closed_obstacle> obs;
+	obs = env.get_obs();
+
+
 
 	collision_detector cd(obs, window_width,window_height, cd_res, node_rad);
 
 	// std::cout << "1 " << (long long int )(cd.dist_field.sdf) << std::endl;
 
-	catheter cath(x_start, y_start, x_dir, y_dir, joint_dist, num_segs, node_rad, spring_const, cd);
+	std::cout << "CD build complete. " << std::endl;
 
+	catheter cath(x_start, y_start, x_dir, y_dir, joint_dist, num_segs, node_rad, spring_const, cd);
+	std::cout << "Cath build complete. " << std::endl;
 
 	std::cout << "opening window..." << std::endl;
 	FsOpenWindow(16,16,window_width,window_height,1, "Catheter Simulation");
