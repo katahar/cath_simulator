@@ -264,7 +264,8 @@ class render_entity
 		const int X = 0;
 		const int Y = 1;
 
-		double scale = 5; // pixels/sim unit
+		double scale = 6; // pixels/sim unit
+		
 
 		// @TODO: Add x rendering criteria too
 		// prevents crashing when moving vertically offscreen.
@@ -333,7 +334,7 @@ class render_entity
 			}
 			else
 			{
-				std::cout << "CENTER OFF SCREEN" <<std::endl;
+				// std::cout << "CENTER OFF SCREEN" <<std::endl;
 			}
 		}
 
@@ -844,7 +845,7 @@ class line_obstacle: public render_entity
 		
 		std::string to_string()
 		{
-			std::string str = "(" + std::to_string(pos[0]) + ", " + std::to_string(pos[1]) + ") ->" + "(" + std::to_string(pos[2]) + ", " + std::to_string(pos[3]) + ")";
+			std::string str = "(" + std::to_string(pos[0]) + ", " + std::to_string(pos[1]) + ") -> (" + std::to_string(pos[2]) + ", " + std::to_string(pos[3]) + ")";
 			return str;
 		}
 
@@ -1503,6 +1504,7 @@ class sdf2D: public render_entity
 
 			// @TODO: Add check to see if the line is within the window
 			std::vector<std::tuple<int, int>> points;
+			int interp_scale = 100;
 			double x1, y1, x2, y2, dx, dy;
 			obs.get_p1(x1, y1);
 			obs.get_p2(x2, y2);
@@ -1514,7 +1516,7 @@ class sdf2D: public render_entity
 			if(abs(dy) < global_resolution)
 			{
 				// std::cout << "Adding horizontal to sdf" << std::endl;
-				int steps = int(abs(dx/global_resolution))*20;
+				int steps = int(abs(dx/global_resolution))*interp_scale;
 				for(int i = 0; i < steps; i++)
 				{
 					std::tuple<int,int> temp_pos = real_to_sdf(x1+(i*dx/steps),y1);
@@ -1529,7 +1531,7 @@ class sdf2D: public render_entity
 			else if (abs(dx) < global_resolution)
 			{
 				// std::cout << "Adding vertical  to sdf" << std::endl;
-				int steps = int(abs(dy/global_resolution))*20;
+				int steps = int(abs(dy/global_resolution))*interp_scale;
 				for(int i = 0; i < steps; i++)
 				{
 					std::tuple<int,int> temp_pos = real_to_sdf(x1,y1+(i*dy/steps));
@@ -1715,7 +1717,7 @@ class environment
 				// ignoring the first line
 				std::getline(obs_file, line);
 				
-				// getting the number of nodes in tip 
+				// getting the number of polygons (obstacles)
 				std::getline(obs_file, line);
 				int num_obstacles= std::stoi(line);
 				std::cout << "Number of obstacles (triangles) file: " << num_obstacles << std::endl;
@@ -1723,14 +1725,15 @@ class environment
 				// blank line
 				std::getline(obs_file, line);
 
-				std::cout << "Number of nodes in tip: " << num_obstacles << std::endl;
-
 				for(int i = 0; i < num_obstacles; i++)
 				{
 					std::vector<vector> obs_corners;
 					
+					// gets number of vertices for a given obstacle
+					std::getline(obs_file, line);
+					int num_vertices= std::stoi(line);
 					// each corner
-					for(int j = 0; j < 3; j++)
+					for(int j = 0; j < num_vertices; j++)
 					{
 						// converts line to std::vector, represents the coordinate of a corner
 						std::getline(obs_file, line);
@@ -2122,6 +2125,16 @@ class catheter : public render_entity
 				}
 		}
 
+		// applies motion to all nodes
+		void translate(double x, double y)
+		{
+			for(auto nd:nodes)
+			{
+				nd->move_rel_pos(x,y);
+			}
+
+		}
+
 		// resolves surface penetration as defined by the SDF by applying spring force on the node
 		void resolve_penetration(node* node, double dt, double spring_const)
 		{
@@ -2261,11 +2274,11 @@ class catheter : public render_entity
 
 				tip_file.close();
 
-				std::cout << "Imported tip  configs: " << std::endl;
-				for(int i = 0; i < num_tip_configs; i++)
-				{
-					print_config(tip_configs[i]);
-				}
+				// std::cout << "Imported tip  configs: " << std::endl;
+				// for(int i = 0; i < num_tip_configs; i++)
+				// {
+				// 	print_config(tip_configs[i]);
+				// }
 			}
 			else
 			{
@@ -2345,11 +2358,11 @@ int main()
 
 	// catheter params
 	double x_start = 10;
-	double y_start = 50;
+	double y_start = 40;
 	double x_dir = 1;
 	double y_dir = 0;
 	double joint_dist = 1.5;
-	int num_segs = 20;
+	int num_segs = 10;
 	double node_rad = 0.445/2;
 	double spring_const = 50;
 
@@ -2390,7 +2403,7 @@ int main()
 	// obs.push_back(temp_obs);
 	// obs.push_back(temp_obs.transform(vector(20,20)));
 
-	environment env = environment("environments/simple_environment.txt");
+	environment env = environment("environments/simple_split.txt");
 	std::vector<closed_obstacle> obs;
 	obs = env.get_obs();
 
@@ -2423,16 +2436,17 @@ int main()
 		switch(key)
         {
 		case FSKEY_UP:
-			cath.move_input(0, mv_vel*dt);
+			// formerly move_input
+			cath.translate(0, mv_vel*dt);
 			break;
 		case FSKEY_DOWN:
-			cath.move_input(0,-mv_vel*dt);
+			cath.translate(0,-mv_vel*dt);
 			break;
         case FSKEY_LEFT:
-			cath.move_input(-mv_vel*dt, 0);
+			cath.translate(-mv_vel*dt, 0);
             break;
         case FSKEY_RIGHT:
-			cath.move_input( mv_vel*dt, 0);
+			cath.translate( mv_vel*dt, 0);
             break;
 		case FSKEY_A:
 			cath.rotate_tip( catheter::CCW);
