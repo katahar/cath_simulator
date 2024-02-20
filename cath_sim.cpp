@@ -1831,6 +1831,7 @@ class collision_detector
 			this->node_rad = node_rad;
 		}
 
+		// @TODO: convert to bool. No longer returns index of obstacle
 		// returns index of obstacle connecting with node. If no collision, returns -1 
 		int check_collision(node* nd)
 		{
@@ -1866,6 +1867,18 @@ class collision_detector
 				return 0;
 			}
 			return nd->get_rad() - dist_field.get_sdf_val(x_sdf, y_sdf) ;
+		}
+
+		double get_split_penetration_dist(node* nd1,node* nd2)
+		{
+			int x_sdf, y_sdf; 
+			dist_field.real_to_sdf(x_sdf, y_sdf, (nd1->get_pos(0)+nd2->get_pos(0))/2, (nd1->get_pos(1)+nd2->get_pos(1))/2);
+			// std::cout << "sdf at current location is" << dist_field.get_sdf_val(x_sdf, y_sdf) << std::endl;
+			if(dist_field.get_sdf_val(x_sdf, y_sdf)  > nd1->get_rad() )
+			{
+				return 0;
+			}
+			return nd1->get_rad() - dist_field.get_sdf_val(x_sdf, y_sdf) ;
 		}
 
 		void copy(const collision_detector &incoming)
@@ -1973,7 +1986,7 @@ class catheter : public render_entity
 		// end_base is the node where the tip will be attached. Assumes rotation angle is 0
 		void build_tip(node* end_base)
 		{
-			load_tip_configs("endpoints/endpoint_config.txt");
+			load_tip_configs("endpoints/endpoint_config_sparse.txt");
 
 			tip_config_ind = 0;
 
@@ -2135,6 +2148,12 @@ class catheter : public render_entity
 
 		}
 
+		// returns the direction from the base node tothe next node
+		double get_dir(int coord)
+		{
+			return nodes[1]->get_pos(coord)-base_node->get_pos(coord); 
+		}
+
 		// resolves surface penetration as defined by the SDF by applying spring force on the node
 		void resolve_penetration(node* node, double dt, double spring_const)
 		{
@@ -2145,7 +2164,22 @@ class catheter : public render_entity
 			node->add_accel(obstacle_norm*-1*spring_const*penetration_dist);
 			std::cout << "applied accel" << (obstacle_norm*-1*spring_const*penetration_dist).to_string() << std::endl;
 			node->move(dt);
+		}
 
+		void resolve_nd_split(node* node1, node* node2, double dt, double spring_const)
+		{
+			node1->reset();
+			node2->reset();
+			double split_penetration_dist = det.get_split_penetration_dist(node1,node2);
+			
+			std::cout << "split penetration distance " << split_penetration_dist << std::endl;
+			
+			vector obstacle_norm = det.get_obs_norm((node1->get_pos(0)+node2->get_pos(0))/2, (node1->get_pos(1)+node2->get_pos(1))/2);
+			node1->add_accel(obstacle_norm*-1*spring_const*split_penetration_dist*2);
+			node2->add_accel(obstacle_norm*-1*spring_const*split_penetration_dist*2);
+			std::cout << "applied accel" << (obstacle_norm*-1*spring_const*split_penetration_dist*2).to_string() << std::endl;
+			node1->move(dt);
+			node2->move(dt);
 		}
 
 		void update(double dt)
@@ -2167,7 +2201,6 @@ class catheter : public render_entity
 			{
 				nodes[i]->reset();
 
-								// col_ind = det.check_collision(nodes[i+1]);
 				if(-1 != det.check_collision(nodes[i+1]))
 				{
 					// std::cout << "\t old acc: " << nodes[i+1]->acc.to_string() << " new acc:  ";
@@ -2175,6 +2208,12 @@ class catheter : public render_entity
 					// nodes[i+1]->apply_constraint(obstacle_norm);
 					// std::cout << nodes[i+1]->acc.to_string()  << std::endl;
 					resolve_penetration(nodes[i+1], dt, obstacle_spring_const);
+				}
+
+				// checks segment collision
+				if(seg_collision(nodes[i], nodes[i+1]))
+				{
+					resolve_nd_split(nodes[i], nodes[i+1], dt, obstacle_spring_const);
 				}
 
 				// std::cout << "enforcing distance constraint for node " <<  std::to_string(i) << "....";
@@ -2325,6 +2364,27 @@ class catheter : public render_entity
 		}
 
 
+		// checks collision between nodes 
+		bool seg_collision(node* nd1, node* nd2)
+		{
+			// could be split by an obstacle.
+			if(1 == det.check_collision(nd1) && 1 == det.check_collision(nd2))
+			{
+				double split_penetration_dist = det.get_split_penetration_dist(nd1,nd2);
+				double penetration_dist1 = det.get_penetration_dist(nd1);
+				double penetration_dist2 = det.get_penetration_dist(nd2);
+				if(split_penetration_dist>penetration_dist1 && split_penetration_dist>penetration_dist2)
+				{
+					// std::cout << "split penetration distance " << split_penetration_dist << std::endl;
+					// std::cout << "penetration distance 1" << penetration_dist1 << std::endl;
+					// std::cout << "penetration distance 2 " << penetration_dist2 << std::endl;
+					return true;
+				}
+
+			}
+			return false;
+		}
+
 		~catheter()
 		{
 			// delete base_node;
@@ -2361,8 +2421,8 @@ int main()
 	double y_start = 40;
 	double x_dir = 1;
 	double y_dir = 0;
-	double joint_dist = 1.5;
-	int num_segs = 10;
+	double joint_dist = 3;
+	int num_segs = 12;
 	double node_rad = 0.445/2;
 	double spring_const = 50;
 
