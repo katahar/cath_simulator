@@ -9,19 +9,21 @@
 #include <queue>
 #include <chrono>
 #include <ctime>
-
+#include <fstream>
+#include <sstream>
 
 #include <iostream>
 #include "fssimplewindow.h"
-// #include "Eigen/Core"
-// #include <Eigen3/Dense>
+#include <Eigen/Dense>
 
 
 #define PI 3.14159265
+
 class node;
 class joint;
 class collision_detector;
 class catheter;
+class environment;
 
 class vector
 {
@@ -130,6 +132,13 @@ class vector
 			{
 				ret_vec.vec[i] = ret_vec.vec[i]/length; 
 			} 
+			return ret_vec;
+		}
+
+		// assumes radians
+		vector rotate(double angle)
+		{
+			vector ret_vec = vector( (this->at(0)*cos(angle)) - this->at(1)*sin(angle), (this->at(0)*sin(angle)) + this->at(1)*cos(angle));
 			return ret_vec;
 		}
 
@@ -255,7 +264,32 @@ class render_entity
 		const int X = 0;
 		const int Y = 1;
 
-		double scale = 2; // pixels/sim unit
+		double scale = 6; // pixels/sim unit
+		
+
+		// @TODO: Add x rendering criteria too
+		// prevents crashing when moving vertically offscreen.
+		bool on_screen(double px, double py)
+		{
+			int sx, sy;
+			PhysicalCoordToScreenCoord(sx,sy,px,py);
+			if(sy<=600 && sy>=0)
+			{
+				return true;
+			}
+			return false;
+		}
+
+		bool on_screen(int sx, int sy)
+		{
+			if(sy<=600 && sy>=0)
+			{
+				return true;
+			}
+			return false;
+		}
+
+
 
 		// @TODO: modify to be able to shift view
 		void PhysicalCoordToScreenCoord(int &sx,int &sy,double px,double py)
@@ -271,76 +305,89 @@ class render_entity
 		
 
 		void DrawCircle(int cx,int cy,int rad,int fill)
-		{
+		{		
 			const double YS_PI=3.1415927;
-
-			if(0!=fill)
+			if(on_screen(cx,cy))
 			{
-				glBegin(GL_POLYGON);
+				if(0!=fill)
+				{
+					glBegin(GL_POLYGON);
+				}
+				else
+				{
+					glBegin(GL_LINE_LOOP);
+				}
+
+				int i;
+				for(i=0; i<64; i++)
+				{
+					double angle=(double)i*YS_PI/32.0;
+					double x=(double)cx+cos(angle)*(double)rad;
+					double y=(double)cy+sin(angle)*(double)rad;
+					if(on_screen(int(x),int(y)))
+					{
+						glVertex2d(x,y);
+					}
+				}
+
+				glEnd();
 			}
 			else
 			{
-				glBegin(GL_LINE_LOOP);
+				// std::cout << "CENTER OFF SCREEN" <<std::endl;
 			}
-
-			int i;
-			for(i=0; i<64; i++)
-			{
-				double angle=(double)i*YS_PI/32.0;
-				double x=(double)cx+cos(angle)*(double)rad;
-				double y=(double)cy+sin(angle)*(double)rad;
-				glVertex2d(x,y);
-			}
-
-			glEnd();
 		}
 
-		void DrawRect(int x1,int y1,int x2,int y2,int fill)
-		{
-			if(0!=fill)
-			{
-				glBegin(GL_QUADS);
-			}
-			else
-			{
-				glBegin(GL_LINE_LOOP);
-			}
+		// void DrawRect(int x1,int y1,int x2,int y2,int fill)
+		// {
+		// 	if(0!=fill)
+		// 	{
+		// 		glBegin(GL_QUADS);
+		// 	}
+		// 	else
+		// 	{
+		// 		glBegin(GL_LINE_LOOP);
+		// 	}
 
-			glVertex2i(x1,y1);
-			glVertex2i(x2,y1);
-			glVertex2i(x2,y2);
-			glVertex2i(x1,y2);
+		// 	glVertex2i(x1,y1);
+		// 	glVertex2i(x2,y1);
+		// 	glVertex2i(x2,y2);
+		// 	glVertex2i(x1,y2);
 
-			glEnd();
-		}
+		// 	glEnd();
+		// }
 
 		void  DrawLine(int x1,int y1,int x2,int y2)
 		{
-			glBegin(GL_LINES);
+			if(on_screen(x1,y1) && on_screen(x2,y2))
+			{
+				glBegin(GL_LINES);
 
-			glVertex2i(x1,y1);
-			glVertex2i(x2,y2);
+				glVertex2i(x1,y1);
+				glVertex2i(x2,y2);
 
-			glEnd();
+				glEnd();
+				
+			}
 		}
 
-		void DrawLineThick(int x1,int y1,int x2,int y2, int thickness)
-		{
-			int x_bl = x1-(thickness/2);
-			int x_br = x1+(thickness/2);
-			int x_tl = x2-(thickness/2);
-			int x_tr = x2+(thickness/2);
-			int y_t = y2;
-			int y_b = y1;
-			glBegin(GL_QUADS);
-			glVertex2i(x_tl,y_t);
-			glVertex2i(x_tr,y_t);
-			glVertex2i(x_br,y_b);
-			glVertex2i(x_bl,y_b);
+		// void DrawLineThick(int x1,int y1,int x2,int y2, int thickness)
+		// {
+		// 	int x_bl = x1-(thickness/2);
+		// 	int x_br = x1+(thickness/2);
+		// 	int x_tl = x2-(thickness/2);
+		// 	int x_tr = x2+(thickness/2);
+		// 	int y_t = y2;
+		// 	int y_b = y1;
+		// 	glBegin(GL_QUADS);
+		// 	glVertex2i(x_tl,y_t);
+		// 	glVertex2i(x_tr,y_t);
+		// 	glVertex2i(x_br,y_b);
+		// 	glVertex2i(x_bl,y_b);
 
-			glEnd();
+		// 	glEnd();
 
-		}
+		// }
 };
 
 
@@ -355,7 +402,7 @@ class node: public render_entity
 		double spring_constant = 20; 
 		double joint_distance = 0; //distance between two bodies. Body to joint "center" is joint_distance/2
 		double dist_tol = 0.05; //meters
-		double angle_tol = 2*PI/180; //meters
+		double angle_tol = (PI/180)*1; //degrees
 
 		vector pos;
 		vector vel = vector(0,0);
@@ -363,15 +410,17 @@ class node: public render_entity
 
 		double mass;
 		bool fixed;
+		bool is_tip;
 
 		double radius;
 		std::vector<node*> connected_nodes;
 
 
-		node(double x, double y, double radius, double neutral_angle, double spring_const, double joint_dist)
+		node(double x, double y, double radius, double neutral_angle, double spring_const, double joint_dist, bool is_tip = false)
 		{
 			pos = vector(x,y);
 			// pos[0] = x;
+			this->is_tip = is_tip;
 			this->radius = radius;
 			this->neutral_angle = neutral_angle;
 			this->spring_constant = spring_const;
@@ -379,7 +428,6 @@ class node: public render_entity
 			this->joint_distance = joint_dist;
 			this->reset();
 		}
-
 		
 		bool connected_to(node* other_node)
 		{
@@ -409,7 +457,6 @@ class node: public render_entity
 			}
 		}
 
-
 		double get_pos(int index)
 		{
 			return pos.at(index);
@@ -434,6 +481,7 @@ class node: public render_entity
 		{
 			return acc;
 		}
+
 		double get_rad()
 		{
 			return this->radius;
@@ -444,11 +492,16 @@ class node: public render_entity
 		{
 			if(!this->is_terminal())
 			{
+				// https://stackoverflow.com/questions/21483999/using-atan2-to-find-angle-between-two-vectors/21486462#21486462
 				vector A = connected_nodes[0]->get_pos() - this->get_pos();
 				vector B = connected_nodes[1]->get_pos() - this->get_pos();
-				double numer = A.dot(B);
-				double denom = A.get_length() * B.get_length();
-				current_angle = acos(numer/denom);
+				current_angle = atan2(B.at(1), B.at(0))-atan2(A.at(1), A.at(0));
+				// normalize it to the range [0, 2 π):
+				if (current_angle < 0) {current_angle  += 2 *PI; }			
+				// std::cout << "new method: " << current_angle ; 
+
+
+				// // std::cout<< "Angle: " << current_angle<< std::endl;
 			}
 			else
 			{
@@ -457,17 +510,27 @@ class node: public render_entity
 			return current_angle;
 		}
 
+		double get_spring_const()
+		{
+			return this->spring_constant;
+		}
 
 		void draw()
 		{
-			glColor3ub(255,0,0);
+			if(this->is_tip)
+			{
+				glColor3ub(235,140,52);
+			}
+			else
+			{
+				glColor3ub(255,0,0);
+			}
 
 			int sRad, sx, sy;
 			render_entity::PhysicalCoordToScreenDim(sRad, radius);
 			render_entity::PhysicalCoordToScreenCoord(sx,sy,pos.at(render_entity::X), pos.at(render_entity::Y));
 			render_entity::DrawCircle(sx,sy,render_entity::scale*0.5,true);
 		}
-		// @TODO: String
 
 		// should only be used for anchor nodes
 		void move_rel_pos(double x, double y) //need to update to include z
@@ -505,13 +568,9 @@ class node: public render_entity
 		//updates velocity based on acceleration, then updates position based on velocity. Velocity always reset to 0
 		void move(double dt)
 		{
-			// vel[0] = vel[0]  + acc[0]*dt;
-			// vel[1] = vel[1]  + acc[1]*dt;
-			// pos[0] = pos[0]  + vel[0]*dt;
-			// pos[1] = pos[1]  + vel[1]*dt;
 			double damping = 5;
 			vel = vel + (acc*dt);
-			acc = acc - (vel*damping*dt);
+			acc = acc - (vel*damping*dt); 
 
 			vel = (acc*dt);
 			pos = pos + (vel*dt);
@@ -637,28 +696,35 @@ class node: public render_entity
 		{
 			if(!this->is_terminal())
 			{
-				// std::cout << "\tcurrent angle: " << current_angle << ", target angle: " << neutral_angle << std::endl;
+				// if(this->is_tip)
+				// {std::cout << "\ttolerance: " << angle_tol << "  current angle: " << current_angle << ", target angle: " << neutral_angle << std::endl;}
 			
 				// cmath uses radians.
 				if(abs(current_angle-neutral_angle) > angle_tol) //current_angle should have been updated in the reset function
 				{
 
 					node* move_node = this->get_other(last_node);
-					// std::cout << "\tenforcing angle. current difference is " << std::to_string(current_angle-neutral_angle);
-					vector A = this->pos-last_node->get_pos();
+					// std::cout << "\tenforcing angle. current angle: " << current_angle << " difference " << std::to_string(current_angle-neutral_angle);
+					// std::cout << " \tdifference " << std::to_string(current_angle-neutral_angle);
+					vector A = last_node->get_pos()-this->pos;
+					
+					// A_rot is vector A rotated by the target angle, which is the goal configuration of move_node
+					vector A_rot = A.rotate(neutral_angle);
+					
 					vector B = move_node->get_pos() -this->pos;
-					vector force_dir = B.get_perpen_toward(A); //normalized direction of force
+					vector force_dir = B.get_perpen_toward(A_rot); //normalized direction of force
 					// std::cout << "\tforce direction " << force_dir.to_string();
 					// std::cout << "\tapplied acceleration " << (force_dir*(spring_constant*abs(current_angle-neutral_angle))).to_string() << std::endl;
 
+					// std::cout << "\t Force magnitude: " << spring_constant*abs(current_angle-neutral_angle)*1 << std::endl;
 					// force = k*theta
-					move_node->add_accel(force_dir*(spring_constant*abs(current_angle-neutral_angle)));
-					// std::cout << "bending acceleration: " << move_node->get_acc().to_string() << std::endl;
+					move_node->add_accel(force_dir*(spring_constant*abs(current_angle-neutral_angle)*1));
+					// std::cout << "\t\tbending acceleration: " << move_node->get_acc().to_string() << std::endl;
 					
 					//              move_node
-					//                 /
-					//                /   vector B
-					//               /
+					//         \        /
+					//   A_rot  \     /   vector B
+					//           \   /
 					//            this node 
 					//              |
 					//              |    vector A
@@ -669,9 +735,30 @@ class node: public render_entity
 			}
 		}
 
+		// returns the difference between the current angle and the neutral angle.
+		double get_angle_dif()
+		{
+			return abs(this->current_angle-this->neutral_angle);
+		}
+
+		double get_neutral_angle()
+		{
+			return this->neutral_angle;
+		}
+
 		void apply_constraint(vector obstacle)
 		{
 			acc.remove_component(obstacle); //propegates to velocity
+		}
+
+		void update_neutral_angle(float new_angle)
+		{
+			this->neutral_angle = new_angle;
+		}
+		
+		void update_joint_dist(double new_dist)
+		{
+			this->joint_distance = new_dist;
 		}
 
 		~node()
@@ -766,6 +853,13 @@ class line_obstacle: public render_entity
 			copy(input);
 		}
 		
+		std::string to_string()
+		{
+			std::string str = "(" + std::to_string(pos[0]) + ", " + std::to_string(pos[1]) + ") -> (" + std::to_string(pos[2]) + ", " + std::to_string(pos[3]) + ")";
+			return str;
+		}
+
+
 		private:
 			void copy(const line_obstacle &input)
 			{
@@ -876,6 +970,17 @@ class closed_obstacle
 			}
 		}
 
+		std::string to_string()
+		{
+			std::string str = "line obstacle: ";
+			for(line_obstacle ln:lines)
+			{
+				str = str + "\n\t\t" + ln.to_string();
+			}
+			return str;
+
+		}
+
 	private:
 		void copy(const closed_obstacle &input)
 		{
@@ -900,7 +1005,6 @@ class closed_obstacle
 
 
 };
-
 
 class sdf2D: public render_entity
 {
@@ -1023,6 +1127,7 @@ class sdf2D: public render_entity
 
 			
 			// std::cout << "Sdf Width:  " << sdf_width << ", sdf height " << sdf_height <<std::endl;
+
 			for(int i = 0; i < 8; i++)
 			{
 				this->dist[i] = this->dist[i]*global_resolution;
@@ -1369,7 +1474,7 @@ class sdf2D: public render_entity
 		// returns direction toward the nearest obstacle (increments of pi/4). Input is in sdf coordinates
 		vector get_gradient(int x_sdf, int y_sdf)
 		{
-			std::cout << "sdf value at current point (" <<   x_sdf << ", " <<  y_sdf << "): " << get_sdf_val(x_sdf, y_sdf) << std::endl;
+			// std::cout << "sdf value at current point (" <<   x_sdf << ", " <<  y_sdf << "): " << get_sdf_val(x_sdf, y_sdf) << std::endl;
 			double min_grad = 1000;
 			int min_ind = -1;
 			
@@ -1408,6 +1513,7 @@ class sdf2D: public render_entity
 
 			// @TODO: Add check to see if the line is within the window
 			std::vector<std::tuple<int, int>> points;
+			int interp_scale = 100;
 			double x1, y1, x2, y2, dx, dy;
 			obs.get_p1(x1, y1);
 			obs.get_p2(x2, y2);
@@ -1419,7 +1525,7 @@ class sdf2D: public render_entity
 			if(abs(dy) < global_resolution)
 			{
 				// std::cout << "Adding horizontal to sdf" << std::endl;
-				int steps = int(abs(dx/global_resolution))*20;
+				int steps = int(abs(dx/global_resolution))*interp_scale;
 				for(int i = 0; i < steps; i++)
 				{
 					std::tuple<int,int> temp_pos = real_to_sdf(x1+(i*dx/steps),y1);
@@ -1434,7 +1540,7 @@ class sdf2D: public render_entity
 			else if (abs(dx) < global_resolution)
 			{
 				// std::cout << "Adding vertical  to sdf" << std::endl;
-				int steps = int(abs(dy/global_resolution))*20;
+				int steps = int(abs(dy/global_resolution))*interp_scale;
 				for(int i = 0; i < steps; i++)
 				{
 					std::tuple<int,int> temp_pos = real_to_sdf(x1,y1+(i*dy/steps));
@@ -1581,6 +1687,124 @@ class sdf2D: public render_entity
 
 };
 
+class environment
+{
+
+	public: 
+		std::vector<closed_obstacle> obs;
+
+		environment(std::string obs_file)
+		{
+			obs = import_obstacles(obs_file);
+		}
+
+		environment(const environment &incoming)
+		{
+			this->copy(incoming);
+		}
+
+		std::vector<closed_obstacle> get_obs()
+		{
+			return obs;
+		}
+
+
+		std::vector<closed_obstacle> import_obstacles(std::string file)
+		{
+			std::cout << "\n\nImporting environment" << std::endl;
+
+			FsChangeToProgramDir();
+
+			std::fstream obs_file;
+			obs_file.open(file, std::ios::in);
+			
+			if(obs_file.is_open())
+			{
+				std::string line;
+				
+				// ignoring the first line
+				std::getline(obs_file, line);
+				
+				// getting the number of polygons (obstacles)
+				std::getline(obs_file, line);
+				int num_obstacles= std::stoi(line);
+				std::cout << "Number of obstacles (triangles) file: " << num_obstacles << std::endl;
+
+				// blank line
+				std::getline(obs_file, line);
+
+				for(int i = 0; i < num_obstacles; i++)
+				{
+					std::vector<vector> obs_corners;
+					
+					// gets number of vertices for a given obstacle
+					std::getline(obs_file, line);
+					int num_vertices= std::stoi(line);
+					// each corner
+					for(int j = 0; j < num_vertices; j++)
+					{
+						// converts line to std::vector, represents the coordinate of a corner
+						std::getline(obs_file, line);
+						std::vector<double> temp_coord = str_to_vec(line);
+						obs_corners.emplace_back(temp_coord[0], temp_coord[1]); 
+					}
+					// skip empty line
+					std::getline(obs_file, line);
+
+					// corners to a closed obstacle
+					closed_obstacle temp_obs = closed_obstacle(obs_corners);
+					obs.push_back(temp_obs);
+					
+				}
+
+				obs_file.close();
+
+				std::cout << "Imported obstacles: " << std::endl;
+				for(int i = 0; i < num_obstacles; i++)
+				{
+					std::cout << "\t" << (obs[i].to_string()) << std::endl;
+				}
+			}
+			else
+			{
+				std::cout << "ERROR: Failed to open " << file << std::endl;
+			}
+
+			return obs;
+		}
+
+		std::vector<double> str_to_vec(std::string input)
+		{
+			std::vector<double> vect;
+
+			std::stringstream ss(input);
+
+			float i;
+
+			while (ss >> i)
+			{
+				vect.push_back(i);
+
+				if (ss.peek() == ',')
+				ss.ignore();
+			}
+			return vect;
+		}
+
+	private:
+		void copy(const environment &incoming)
+		{
+			this->obs = incoming.obs;
+		}
+
+		void operator=(const environment &incoming)
+		{
+			this->copy(incoming);
+		}
+
+};
+
+
 class collision_detector
 {
 	public: 
@@ -1615,13 +1839,14 @@ class collision_detector
 			this->node_rad = node_rad;
 		}
 
+		// @TODO: convert to bool. No longer returns index of obstacle
 		// returns index of obstacle connecting with node. If no collision, returns -1 
 		int check_collision(node* nd)
 		{
 
 			if(fine_overlap(nd))
 			{
-				std::cout << "fine overlap detected!" << std::endl;
+				// std::cout << "fine overlap detected!" << std::endl;
 				return 1;
 			}
 			return -1;
@@ -1652,6 +1877,18 @@ class collision_detector
 			return nd->get_rad() - dist_field.get_sdf_val(x_sdf, y_sdf) ;
 		}
 
+		double get_split_penetration_dist(node* nd1,node* nd2)
+		{
+			int x_sdf, y_sdf; 
+			dist_field.real_to_sdf(x_sdf, y_sdf, (nd1->get_pos(0)+nd2->get_pos(0))/2, (nd1->get_pos(1)+nd2->get_pos(1))/2);
+			// std::cout << "sdf at current location is" << dist_field.get_sdf_val(x_sdf, y_sdf) << std::endl;
+			if(dist_field.get_sdf_val(x_sdf, y_sdf)  > nd1->get_rad() )
+			{
+				return 0;
+			}
+			return nd1->get_rad() - dist_field.get_sdf_val(x_sdf, y_sdf) ;
+		}
+
 		void copy(const collision_detector &incoming)
 		{
 			this->dist_field = incoming.dist_field;
@@ -1666,7 +1903,7 @@ class collision_detector
 
 		}
 
-
+		
 
 	private:
 
@@ -1683,11 +1920,27 @@ class collision_detector
 class catheter : public render_entity
 {
 	public:
-		std::vector<node*> nodes;
+		static const int CW = 3;
+		static const int CCW  = 4;
+
+		std::vector<node*> nodes; //include tip nodes
+		std::vector<node*> tip_nodes;
 		int num_nodes;
+		int num_tip_nodes; //assumes that one is shared with the base catheter
 		collision_detector det;
 
 		node* base_node;
+
+		struct tip_config{ 
+			int rot_angle; //in degrees
+			std::vector<double> joint_distances;
+			std::vector<double> joint_angles;
+		};
+
+		int num_tip_configs;
+		std::vector<tip_config> tip_configs;
+
+		int tip_config_ind;
 
 		catheter(double x_origin, double y_origin, double x_dir, double y_dir, double joint_distance, int num_segments, double radius, double spring_const, collision_detector detector)
 		{
@@ -1700,7 +1953,7 @@ class catheter : public render_entity
 			double step_y = unit_y*joint_distance;
 
 			num_nodes = num_segments+1;
-			// double spring_const = 700;
+
 			//setting nodes
 			for(int i = 0; i < num_nodes; i++)
 			{
@@ -1718,17 +1971,19 @@ class catheter : public render_entity
 			for(int i = 1; i < num_nodes; i++)
 			{
 				nodes[i]->connect_node(nodes[i-1]);
-				
 			}
 
 			//reading nodes
-
 			int count = 0;
 			for(auto iter = nodes.begin(); iter != nodes.end(); iter++)
 			{
 				std::cout << "node " << count << ": (" << (*iter)->get_pos((*iter)->X) << ", " << (*iter)->get_pos((*iter)->Y) << ")" << std::endl;
 				count++;
 			}
+			
+			
+			
+			build_tip(nodes[num_nodes-1]);
 
 			std::cout << "cath build complete " << std::endl;
 
@@ -1736,6 +1991,109 @@ class catheter : public render_entity
 
 		}
 
+		// end_base is the node where the tip will be attached. Assumes rotation angle is 0
+		void build_tip(node* end_base)
+		{
+			load_tip_configs("endpoints/endpoint_config_sparse.txt");
+
+			tip_config_ind = 0;
+
+			// adjusts the last base node's neutral angle
+			end_base->update_neutral_angle(tip_configs[tip_config_ind].joint_angles[0]);
+			end_base->is_tip = true;
+			tip_nodes.push_back(end_base);
+
+			for(int i = 1; i < num_tip_nodes-1; i++)
+			{
+				node* temp_node = new node(tip_nodes[i-1]->get_pos(0) + (tip_configs[tip_config_ind].joint_distances[i-1]*cos(tip_configs[tip_config_ind].joint_angles[i-1])), 
+											tip_nodes[i-1]->get_pos(1) + (tip_configs[tip_config_ind].joint_distances[i-1]*sin(tip_configs[tip_config_ind].joint_angles[i-1])), 
+											tip_nodes[i-1]->get_rad(), 
+											tip_configs[tip_config_ind].joint_angles[i], 
+											tip_nodes[i-1]->get_spring_const(), 
+											tip_configs[tip_config_ind].joint_distances[i], 
+											true);
+				nodes.push_back(temp_node);
+				tip_nodes.push_back(temp_node);
+			}
+
+			// adding last node
+			node* temp_node = new node(tip_nodes[num_tip_nodes-2]->get_pos(0) + (tip_configs[tip_config_ind].joint_distances[num_tip_nodes-2]*cos(tip_configs[tip_config_ind].joint_angles[num_tip_nodes-2])), 
+											tip_nodes[num_tip_nodes-2]->get_pos(1) + (tip_configs[tip_config_ind].joint_distances[num_tip_nodes-2]*sin(tip_configs[tip_config_ind].joint_angles[num_tip_nodes-2])), 
+											tip_nodes[num_tip_nodes-2]->get_rad(), 
+											PI, 
+											tip_nodes[num_tip_nodes-2]->get_spring_const(), 
+											3, 
+											true);
+			nodes.push_back(temp_node);
+			tip_nodes.push_back(temp_node);
+
+			//connecting nodes
+			for(int i = 1; i < num_tip_nodes; i++)
+			{
+				tip_nodes[i]->connect_node(tip_nodes[i-1]);
+			}
+			
+			num_nodes+=num_tip_nodes-1;
+
+
+			//reading nodes
+			int count = 0;
+			for(auto iter = tip_nodes.begin(); iter != tip_nodes.end(); iter++)
+			{
+				std::cout << "tip node " << count << ": (" << (*iter)->get_pos((*iter)->X) << ", " << (*iter)->get_pos((*iter)->Y) << ")" << std::endl;
+				count++;
+			}
+			
+
+		}
+
+		// updates tip_config_ind index and returns the associated configuration
+		tip_config get_config(int direction )
+		{
+			// assumes we always have configurations 0-180
+			if(CCW == direction)
+			{
+				tip_config_ind++;
+				if(tip_config_ind > num_tip_configs-1)
+				{
+					tip_config_ind = 0;
+				}
+			}
+			else if(CW == direction)
+			{
+				tip_config_ind--;
+				if(tip_config_ind < 0)
+				{
+					tip_config_ind = num_tip_configs-1;
+				}
+			}
+			else
+			{
+				std::cout << "ERROR: Invalid applied direction" << std::endl;
+			}
+
+			return tip_configs[tip_config_ind];
+
+		}
+
+
+		// Use catheter::CW or catheter::CCW as input
+		void rotate_tip(int direction)
+		{
+			// getting the updated configuration after rotating
+			tip_config temp_config = get_config(direction);
+
+			// std::cout << "Tip nodes: " << num_tip_nodes << std::endl;
+			// print_config(temp_config);
+
+			std::cout << "Rotating to " << temp_config.rot_angle << std::endl;
+			for(int i = 0; i < num_tip_nodes-1; i++)
+			{
+				tip_nodes[i]->update_neutral_angle(temp_config.joint_angles[i]);
+				tip_nodes[i]->update_joint_dist(temp_config.joint_distances[i]);
+			}
+
+		}
 
 		void move_input(double x, double y)
 		{
@@ -1788,17 +2146,59 @@ class catheter : public render_entity
 				}
 		}
 
+		// applies motion to all nodes
+		void translate(double x, double y)
+		{
+			for(auto nd:nodes)
+			{
+				nd->move_rel_pos(x,y);
+			}
+
+		}
+
+		// returns the direction from the base node tothe next node
+		double get_dir(int coord)
+		{
+			return nodes[1]->get_pos(coord)-base_node->get_pos(coord); 
+		}
+
 		// resolves surface penetration as defined by the SDF by applying spring force on the node
 		void resolve_penetration(node* node, double dt, double spring_const)
 		{
+
+			double pen_lim = 0.2;
+
 			node->reset();
 			double penetration_dist = det.get_penetration_dist(node);
-			std::cout << "penetration distance " << penetration_dist << std::endl;
+			if(penetration_dist>pen_lim)
+			{
+				std::cout << "reset penetration dist from " << penetration_dist << "to " << pen_lim << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!"<<  std::endl;
+				penetration_dist = pen_lim;
+			}
+			else
+			{
+				std::cout << "penetration distance " << penetration_dist <<std::endl;
+			}
 			vector obstacle_norm = det.get_obs_norm(node->get_pos(0), node->get_pos(1));
 			node->add_accel(obstacle_norm*-1*spring_const*penetration_dist);
 			std::cout << "applied accel" << (obstacle_norm*-1*spring_const*penetration_dist).to_string() << std::endl;
 			node->move(dt);
+		}
 
+		void resolve_nd_split(node* node1, node* node2, double dt, double spring_const)
+		{
+			node1->reset();
+			node2->reset();
+			double split_penetration_dist = det.get_split_penetration_dist(node1,node2);
+			
+			std::cout << "split penetration distance " << split_penetration_dist << std::endl;
+			
+			vector obstacle_norm = det.get_obs_norm((node1->get_pos(0)+node2->get_pos(0))/2, (node1->get_pos(1)+node2->get_pos(1))/2);
+			node1->add_accel(obstacle_norm*-1*spring_const*split_penetration_dist*2);
+			node2->add_accel(obstacle_norm*-1*spring_const*split_penetration_dist*2);
+			std::cout << "applied accel" << (obstacle_norm*-1*spring_const*split_penetration_dist*2).to_string() << std::endl;
+			node1->move(dt);
+			node2->move(dt);
 		}
 
 		void update(double dt)
@@ -1820,7 +2220,6 @@ class catheter : public render_entity
 			{
 				nodes[i]->reset();
 
-								// col_ind = det.check_collision(nodes[i+1]);
 				if(-1 != det.check_collision(nodes[i+1]))
 				{
 					// std::cout << "\t old acc: " << nodes[i+1]->acc.to_string() << " new acc:  ";
@@ -1830,13 +2229,40 @@ class catheter : public render_entity
 					resolve_penetration(nodes[i+1], dt, obstacle_spring_const);
 				}
 
+				// checks segment collision
+				if(seg_collision(nodes[i], nodes[i+1]))
+				{
+					resolve_nd_split(nodes[i], nodes[i+1], dt, obstacle_spring_const);
+				}
+
 				// std::cout << "enforcing distance constraint for node " <<  std::to_string(i) << "....";
 				nodes[i]->enforce_dist_constraint(nodes[i-1],dt);
 				// std::cout << "done" << std::endl;
 				// std::cout << "distance constraint enforced. " <<  std::to_string(i) << std::endl;
 				
 				// std::cout << "bending force for joint " <<  std::to_string(i) << "...." <<std::endl;
-				nodes[i]->apply_bending_force(nodes[i-1]);
+				
+				// angle is too sudden.
+				if(i>1 && nodes[i]->get_angle_dif()>PI/5)
+				{
+					double center_diff = nodes[i]->get_angle_dif();
+					double neutral_old = nodes[i-1]->get_neutral_angle();
+					nodes[i-1]->update_neutral_angle(neutral_old-(center_diff)/2);
+					nodes[i-1]->apply_bending_force(nodes[i-2]); //applies force to current node
+					nodes[i-1]->enforce_dist_constraint(nodes[i-2],dt);
+
+					nodes[i]->move(dt);	//moves current node
+					nodes[i-1]->update_neutral_angle(neutral_old); //resets old node
+
+					nodes[i]->apply_bending_force(nodes[i-1]); //moves next node
+
+
+				}
+				// respond normally
+				else
+				{
+					nodes[i]->apply_bending_force(nodes[i-1]);
+				}
 				// std::cout << "\tdone" << std::endl;
 
 				// std::cout << "node " << std::to_string(i)<< " pushing node  " << std::to_string(i+1) << ": " << nodes[i+1]->to_string() << std::endl;
@@ -1854,24 +2280,6 @@ class catheter : public render_entity
 			// std::cout << "---------------------------------" << std::endl;
 
 		}
-
-		~catheter()
-		{
-			// delete base_node;
-			base_node = nullptr;
-			for(int i = 0; i < nodes.size(); i++)
-			{
-				delete nodes[i];
-			}
-		}
-
-		void operator=(const catheter& input)
-		{
-			this->nodes = input.nodes;
-			this->num_nodes = input.num_nodes;
-			this->base_node = input.base_node;
-		}
-
 
 		void draw()
 		{
@@ -1896,6 +2304,147 @@ class catheter : public render_entity
 
 		}
 
+		void load_tip_configs(std::string file)
+		{
+			std::cout << "\n\nImporting tip configurations" << std::endl;
+			
+			FsChangeToProgramDir();
+
+			std::fstream tip_file;
+			tip_file.open(file, std::ios::in);
+			if(tip_file.is_open())
+			{
+				std::string line;
+				
+				// ignoring the first line
+				std::getline(tip_file, line);
+				
+				// getting the number of nodes in tip 
+				std::getline(tip_file, line);
+				num_tip_nodes= std::stoi(line);
+				std::cout << "Number of nodes in tip: " << num_tip_nodes << std::endl;
+
+				// Getting the number of configurations. Assumes that 180 degrees is covered.
+				std::getline(tip_file, line);
+				num_tip_configs= std::stoi(line);
+				std::cout << "Number of nodes in tip: " << num_tip_configs << std::endl;
+
+				for(int i = 0; i < num_tip_configs; i++)
+				{
+
+					// getting the angle
+					std::getline(tip_file, line);
+					int temp_angle = std::stoi(line);
+
+					// getting the distances
+					std::getline(tip_file, line);
+					std::vector<double> temp_distances = str_to_vec(line);
+					
+					// getting the angles
+					std::getline(tip_file, line);
+					std::vector<double> temp_angles= str_to_vec(line);
+					
+					// ignoring the blank line
+					std::getline(tip_file, line);
+
+					tip_config temp_config = {temp_angle, temp_distances, temp_angles};
+					tip_configs.push_back(temp_config);
+				}
+
+				tip_file.close();
+
+				// std::cout << "Imported tip  configs: " << std::endl;
+				// for(int i = 0; i < num_tip_configs; i++)
+				// {
+				// 	print_config(tip_configs[i]);
+				// }
+			}
+			else
+			{
+				std::cout << "ERROR: Failed to open " << file << std::endl;
+			}
+
+		}
+
+		std::vector<double> str_to_vec(std::string input)
+		{
+			std::vector<double> vect;
+
+			std::stringstream ss(input);
+
+			float i;
+
+			while (ss >> i)
+			{
+				vect.push_back(i);
+
+				if (ss.peek() == ',')
+				ss.ignore();
+			}
+			return vect;
+		}
+
+		void print_config(tip_config input)
+		{
+			std::cout << "Rotation Angle: " << input.rot_angle << std::endl;
+			
+			std::cout << "\t Node Distances: ";
+			for(int i = 0; i < input.joint_distances.size(); i++)
+			{
+				std::cout << input.joint_distances[i] << ", ";
+			}
+			std::cout << ""<< std::endl;
+
+			std::cout << "\t joint angles: ";
+			for(int i = 0; i < input.joint_angles.size(); i++)
+			{
+				std::cout << input.joint_angles[i] << ", ";
+			}
+			std::cout << ""<< std::endl;
+		}
+
+
+		// checks collision between nodes 
+		bool seg_collision(node* nd1, node* nd2)
+		{
+			// could be split by an obstacle.
+			if(1 == det.check_collision(nd1) && 1 == det.check_collision(nd2))
+			{
+				double split_penetration_dist = det.get_split_penetration_dist(nd1,nd2);
+				double penetration_dist1 = det.get_penetration_dist(nd1);
+				double penetration_dist2 = det.get_penetration_dist(nd2);
+				if(split_penetration_dist>penetration_dist1 || split_penetration_dist>penetration_dist2)
+				{
+					// std::cout << "split penetration distance " << split_penetration_dist << std::endl;
+					// std::cout << "penetration distance 1" << penetration_dist1 << std::endl;
+					// std::cout << "penetration distance 2 " << penetration_dist2 << std::endl;
+					return true;
+				}
+
+			}
+			return false;
+		}
+
+		~catheter()
+		{
+			// delete base_node;
+			base_node = nullptr;
+			for(int i = 0; i < nodes.size(); i++)
+			{
+				delete nodes[i];
+			}
+		}
+
+		void operator=(const catheter& input)
+		{
+			this->nodes = input.nodes;
+			this->num_nodes = input.num_nodes;
+			this->base_node = input.base_node;
+		}
+
+
+		
+
 };
 
 
@@ -1905,40 +2454,69 @@ int main()
 	int window_width = 800;
 	int window_height = 600;
 
-
 	// assume that scale is at 1000 sim units = 1 "real" meter. 1 sim = 1 mm
 
-
 	// catheter params
-	double x_start = 40;
-	double y_start = 0.1;
-	double x_dir = 0;
-	double y_dir = 1;
-	double joint_dist = 5;
-	int num_segs = 5;
+	double x_start = 10;
+	double y_start = 40;
+	double x_dir = 1;
+	double y_dir = 0;
+	double joint_dist = 3;
+	int num_segs = 12;
 	double node_rad = 0.445/2;
-	double spring_const = 50;
+	double spring_const = 70;
 
 	// collisoion detection params
 	double cd_res = 0.25;
 
-	// add closed obstacles
-	std::vector<closed_obstacle> obs;
-	std::vector<vector> obs_corners;
-	obs_corners.emplace_back(5,10); 
-	obs_corners.emplace_back(35,10); 
-	obs_corners.emplace_back(5,45); 
+	// // add closed obstacles
+	// std::vector<vector> obs_corners1;
+	// obs_corners1.emplace_back(60,60); 
+	// obs_corners1.emplace_back(70,60); 
+	// obs_corners1.emplace_back(70,45); 
 
-	closed_obstacle temp_obs = closed_obstacle(obs_corners);
-	obs.push_back(temp_obs);
+
+	// std::vector<vector> obs_corners2;
+	// obs_corners2.emplace_back(20,40); 
+	// obs_corners2.emplace_back(100,40); 
+	// obs_corners2.emplace_back(100,20); 
+	// obs_corners2.emplace_back(20,20); 
+
+	// std::vector<vector> obs_corners3;
+	// obs_corners3.emplace_back(80,40); 
+	// obs_corners3.emplace_back(90,40); 
+	// obs_corners3.emplace_back(90,50); 
+
+	// std::vector<vector> obs_corners4;
+	// obs_corners4.emplace_back(20,60); 
+	// obs_corners4.emplace_back(100,60); 
+	// obs_corners4.emplace_back(100,90); 
+	// obs_corners4.emplace_back(20,90); 
+
+	// closed_obstacle temp_obs = closed_obstacle(obs_corners1);
+	// obs.push_back(temp_obs);
+	// temp_obs = closed_obstacle(obs_corners2);
+	// obs.push_back(temp_obs);
+	// temp_obs = closed_obstacle(obs_corners3);
+	// obs.push_back(temp_obs);
+	// temp_obs = closed_obstacle(obs_corners4);
+	// obs.push_back(temp_obs);
 	// obs.push_back(temp_obs.transform(vector(20,20)));
+
+	environment env = environment("environments/simple_split.txt");
+	std::vector<closed_obstacle> obs;
+	obs = env.get_obs();
+
+
 
 	collision_detector cd(obs, window_width,window_height, cd_res, node_rad);
 
 	// std::cout << "1 " << (long long int )(cd.dist_field.sdf) << std::endl;
 
-	catheter cath(x_start, y_start, x_dir, y_dir, joint_dist, num_segs, node_rad, spring_const, cd);
+	std::cout << "CD build complete. " << std::endl;
 
+	catheter cath(x_start, y_start, x_dir, y_dir, joint_dist, num_segs, node_rad, spring_const, cd);
+	std::cout << "Cath build complete. " << std::endl;
 
 	std::cout << "opening window..." << std::endl;
 	FsOpenWindow(16,16,window_width,window_height,1, "Catheter Simulation");
@@ -1958,16 +2536,23 @@ int main()
 		switch(key)
         {
 		case FSKEY_UP:
-			cath.move_input(0, mv_vel*dt);
+			// formerly move_input
+			cath.translate(0, mv_vel*dt);
 			break;
 		case FSKEY_DOWN:
-			cath.move_input(0,-mv_vel*dt);
+			cath.translate(0,-mv_vel*dt);
 			break;
         case FSKEY_LEFT:
-			cath.move_input(-mv_vel*dt, 0);
+			cath.translate(-mv_vel*dt, 0);
             break;
         case FSKEY_RIGHT:
-			cath.move_input( mv_vel*dt, 0);
+			cath.translate( mv_vel*dt, 0);
+            break;
+		case FSKEY_A:
+			cath.rotate_tip( catheter::CCW);
+            break;
+		case FSKEY_D:
+			cath.rotate_tip( catheter::CW);
             break;
 		case FSKEY_Q:
 			// show SDF
