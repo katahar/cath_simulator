@@ -428,7 +428,6 @@ class node: public render_entity
 			this->joint_distance = joint_dist;
 			this->reset();
 		}
-
 		
 		bool connected_to(node* other_node)
 		{
@@ -458,7 +457,6 @@ class node: public render_entity
 			}
 		}
 
-
 		double get_pos(int index)
 		{
 			return pos.at(index);
@@ -483,6 +481,7 @@ class node: public render_entity
 		{
 			return acc;
 		}
+
 		double get_rad()
 		{
 			return this->radius;
@@ -734,6 +733,17 @@ class node: public render_entity
 
 				}
 			}
+		}
+
+		// returns the difference between the current angle and the neutral angle.
+		double get_angle_dif()
+		{
+			return abs(this->current_angle-this->neutral_angle);
+		}
+
+		double get_neutral_angle()
+		{
+			return this->neutral_angle;
 		}
 
 		void apply_constraint(vector obstacle)
@@ -995,7 +1005,6 @@ class closed_obstacle
 
 
 };
-
 
 class sdf2D: public render_entity
 {
@@ -1465,7 +1474,7 @@ class sdf2D: public render_entity
 		// returns direction toward the nearest obstacle (increments of pi/4). Input is in sdf coordinates
 		vector get_gradient(int x_sdf, int y_sdf)
 		{
-			std::cout << "sdf value at current point (" <<   x_sdf << ", " <<  y_sdf << "): " << get_sdf_val(x_sdf, y_sdf) << std::endl;
+			// std::cout << "sdf value at current point (" <<   x_sdf << ", " <<  y_sdf << "): " << get_sdf_val(x_sdf, y_sdf) << std::endl;
 			double min_grad = 1000;
 			int min_ind = -1;
 			
@@ -1678,7 +1687,6 @@ class sdf2D: public render_entity
 
 };
 
-
 class environment
 {
 
@@ -1838,7 +1846,7 @@ class collision_detector
 
 			if(fine_overlap(nd))
 			{
-				std::cout << "fine overlap detected!" << std::endl;
+				// std::cout << "fine overlap detected!" << std::endl;
 				return 1;
 			}
 			return -1;
@@ -2157,9 +2165,20 @@ class catheter : public render_entity
 		// resolves surface penetration as defined by the SDF by applying spring force on the node
 		void resolve_penetration(node* node, double dt, double spring_const)
 		{
+
+			double pen_lim = 0.2;
+
 			node->reset();
 			double penetration_dist = det.get_penetration_dist(node);
-			std::cout << "penetration distance " << penetration_dist << std::endl;
+			if(penetration_dist>pen_lim)
+			{
+				std::cout << "reset penetration dist from " << penetration_dist << "to " << pen_lim << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!"<<  std::endl;
+				penetration_dist = pen_lim;
+			}
+			else
+			{
+				std::cout << "penetration distance " << penetration_dist <<std::endl;
+			}
 			vector obstacle_norm = det.get_obs_norm(node->get_pos(0), node->get_pos(1));
 			node->add_accel(obstacle_norm*-1*spring_const*penetration_dist);
 			std::cout << "applied accel" << (obstacle_norm*-1*spring_const*penetration_dist).to_string() << std::endl;
@@ -2222,7 +2241,28 @@ class catheter : public render_entity
 				// std::cout << "distance constraint enforced. " <<  std::to_string(i) << std::endl;
 				
 				// std::cout << "bending force for joint " <<  std::to_string(i) << "...." <<std::endl;
-				nodes[i]->apply_bending_force(nodes[i-1]);
+				
+				// angle is too sudden.
+				if(i>1 && nodes[i]->get_angle_dif()>PI/5)
+				{
+					double center_diff = nodes[i]->get_angle_dif();
+					double neutral_old = nodes[i-1]->get_neutral_angle();
+					nodes[i-1]->update_neutral_angle(neutral_old-(center_diff)/2);
+					nodes[i-1]->apply_bending_force(nodes[i-2]); //applies force to current node
+					nodes[i-1]->enforce_dist_constraint(nodes[i-2],dt);
+
+					nodes[i]->move(dt);	//moves current node
+					nodes[i-1]->update_neutral_angle(neutral_old); //resets old node
+
+					nodes[i]->apply_bending_force(nodes[i-1]); //moves next node
+
+
+				}
+				// respond normally
+				else
+				{
+					nodes[i]->apply_bending_force(nodes[i-1]);
+				}
 				// std::cout << "\tdone" << std::endl;
 
 				// std::cout << "node " << std::to_string(i)<< " pushing node  " << std::to_string(i+1) << ": " << nodes[i+1]->to_string() << std::endl;
@@ -2373,7 +2413,7 @@ class catheter : public render_entity
 				double split_penetration_dist = det.get_split_penetration_dist(nd1,nd2);
 				double penetration_dist1 = det.get_penetration_dist(nd1);
 				double penetration_dist2 = det.get_penetration_dist(nd2);
-				if(split_penetration_dist>penetration_dist1 && split_penetration_dist>penetration_dist2)
+				if(split_penetration_dist>penetration_dist1 || split_penetration_dist>penetration_dist2)
 				{
 					// std::cout << "split penetration distance " << split_penetration_dist << std::endl;
 					// std::cout << "penetration distance 1" << penetration_dist1 << std::endl;
@@ -2424,7 +2464,7 @@ int main()
 	double joint_dist = 3;
 	int num_segs = 12;
 	double node_rad = 0.445/2;
-	double spring_const = 50;
+	double spring_const = 70;
 
 	// collisoion detection params
 	double cd_res = 0.25;
