@@ -579,8 +579,8 @@ class node: public render_entity
 			acc = vector(x,y);
 		}
 		
-		//updates velocity based on acceleration, then updates position based on velocity. Velocity always reset to 0
-		void move(double dt)
+		//updates velocity based on acceleration, then updates position based on velocity. Velocity always reset to 0. Returns the displacemetn
+		vector move(double dt)
 		{
 			double damping = 5;
 			vel = vel + (acc*dt);
@@ -588,6 +588,7 @@ class node: public render_entity
 
 			vel = (acc*dt);
 			pos = pos + (vel*dt);
+			return vel*dt;
 		}
 
 		void reset()
@@ -2241,7 +2242,13 @@ class catheter : public render_entity
 
 			nodes[0]->reset();
 			nodes[0]->enforce_dist_constraint(nullptr,dt);
-			nodes[1]->move(dt);
+			
+			vector downstream_disp = nodes[1]->move(dt);
+			// blindly displaces all following nodes
+			for(int j = 2; j < num_nodes; j++)
+			{
+				nodes[j]->move_rel_pos(downstream_disp);
+			}
 
 			// iterates through all nonterminal nodes
 			for(int i = 1; i < num_nodes-1; i ++)
@@ -2296,8 +2303,13 @@ class catheter : public render_entity
 				// std::cout << "node " << std::to_string(i)<< " pushing node  " << std::to_string(i+1) << ": " << nodes[i+1]->to_string() << std::endl;
 				// std::cout << "Acceleration after adding bending and constraints: " << nodes[i]->get_acc().to_string() << std::endl;
 				
-				// moved to before the collision detection 
-				nodes[i+1]->move(dt);
+				vector downstream_disp = nodes[i+1]->move(dt);
+				// blindly displaces all following nodes
+				for(int j = i+2; j < num_nodes; j++)
+				{
+					nodes[j]->move_rel_pos(downstream_disp);
+				}
+
 									
 			}
 			nodes[num_nodes-1]->reset();
@@ -2498,40 +2510,6 @@ int main()
 	// collisoion detection params
 	double cd_res = 0.25;
 
-	// // add closed obstacles
-	// std::vector<vector> obs_corners1;
-	// obs_corners1.emplace_back(60,60); 
-	// obs_corners1.emplace_back(70,60); 
-	// obs_corners1.emplace_back(70,45); 
-
-
-	// std::vector<vector> obs_corners2;
-	// obs_corners2.emplace_back(20,40); 
-	// obs_corners2.emplace_back(100,40); 
-	// obs_corners2.emplace_back(100,20); 
-	// obs_corners2.emplace_back(20,20); 
-
-	// std::vector<vector> obs_corners3;
-	// obs_corners3.emplace_back(80,40); 
-	// obs_corners3.emplace_back(90,40); 
-	// obs_corners3.emplace_back(90,50); 
-
-	// std::vector<vector> obs_corners4;
-	// obs_corners4.emplace_back(20,60); 
-	// obs_corners4.emplace_back(100,60); 
-	// obs_corners4.emplace_back(100,90); 
-	// obs_corners4.emplace_back(20,90); 
-
-	// closed_obstacle temp_obs = closed_obstacle(obs_corners1);
-	// obs.push_back(temp_obs);
-	// temp_obs = closed_obstacle(obs_corners2);
-	// obs.push_back(temp_obs);
-	// temp_obs = closed_obstacle(obs_corners3);
-	// obs.push_back(temp_obs);
-	// temp_obs = closed_obstacle(obs_corners4);
-	// obs.push_back(temp_obs);
-	// obs.push_back(temp_obs.transform(vector(20,20)));
-
 	environment env = environment("environments/simple_split.txt");
 	std::vector<closed_obstacle> obs;
 	obs = env.get_obs();
@@ -2539,8 +2517,6 @@ int main()
 
 
 	collision_detector cd(obs, window_width,window_height, cd_res, node_rad);
-
-	// std::cout << "1 " << (long long int )(cd.dist_field.sdf) << std::endl;
 
 	std::cout << "CD build complete. " << std::endl;
 
