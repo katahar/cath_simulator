@@ -56,12 +56,13 @@ class vector
 
 		vector(const vector& other)
 		{
-			this->dims = other.dims;
-			vec = new double[dims];
-			for(int i = 0; i < dims; i++)
-			{
-				this->vec[i] = other.vec[i];
-			}
+			// this->dims = other.dims;
+			// vec = new double[dims];
+			// for(int i = 0; i < dims; i++)
+			// {
+			// 	this->vec[i] = other.vec[i];
+			// }
+			this->copy(other);
 		}
 
 		// @TODO: update for 3d
@@ -158,6 +159,10 @@ class vector
 
 		std::string to_string()
 		{
+			if(-1 == dims)
+			{
+				return  "( ! Vector not instantiated ! )";
+			}
 			std::string ret_str = "(";
 			for(int i =0; i < dims; i++)
 			{
@@ -227,14 +232,18 @@ class vector
 
 		void operator=(const vector& input)
 		{
+			this->copy(input);
+		}
+		
+		void copy(const vector& input)
+		{
 			this->dims = input.dims;
-			vec = new double[dims];
+			this->vec = new double[dims];
 			for(int i = 0; i < dims; i++)
 			{
 				this->vec[i] = input.vec[i];
 			}
 		}
-		
 		~vector()
 		{
 			delete[] vec;
@@ -404,7 +413,7 @@ class node: public render_entity
 		double dist_tol = 0.05; //meters
 		double angle_tol = (PI/180)*1; //degrees
 
-		vector pos;
+		vector pos = vector(-310000000, -310000000);
 		vector vel = vector(0,0);
 		vector acc = vector(0,0);
 
@@ -429,6 +438,11 @@ class node: public render_entity
 			this->reset();
 		}
 		
+		node(const node& incoming)
+		{
+			this->copy(incoming);
+		}
+
 		bool connected_to(node* other_node)
 		{
 			if(!connected_nodes.empty())
@@ -565,8 +579,8 @@ class node: public render_entity
 			acc = vector(x,y);
 		}
 		
-		//updates velocity based on acceleration, then updates position based on velocity. Velocity always reset to 0
-		void move(double dt)
+		//updates velocity based on acceleration, then updates position based on velocity. Velocity always reset to 0. Returns the displacemetn
+		vector move(double dt)
 		{
 			double damping = 5;
 			vel = vel + (acc*dt);
@@ -574,6 +588,7 @@ class node: public render_entity
 
 			vel = (acc*dt);
 			pos = pos + (vel*dt);
+			return vel*dt;
 		}
 
 		void reset()
@@ -761,6 +776,30 @@ class node: public render_entity
 			this->joint_distance = new_dist;
 		}
 
+		void copy(const node& incoming)
+		{
+			this->neutral_angle = incoming.neutral_angle;
+			this->current_angle = incoming.current_angle;
+			this->spring_constant = incoming.spring_constant;
+			this->joint_distance = incoming.joint_distance;
+			this->dist_tol = incoming.dist_tol;
+			this->angle_tol = incoming.angle_tol;
+			this->pos = incoming.pos;
+			this->vel = incoming.vel;
+			this->acc = incoming.acc;
+
+			this->mass = incoming.mass;
+			this->fixed = incoming.fixed;
+			this->is_tip = incoming.is_tip;
+
+			this->radius = incoming.radius;
+
+			for(auto nd:connected_nodes)
+			{
+				this->connected_nodes.push_back(nd);
+			}
+		}
+		
 		~node()
 		{
 			for(int i = 0; i < connected_nodes.size(); i++)
@@ -1492,7 +1531,7 @@ class sdf2D: public render_entity
 					}
 				}
 			}
-			return vector(directs[min_ind][0], directs[min_ind][1] );
+			return vector(directs[min_ind][0], directs[min_ind][1] ).normalize();
 
 			// for(int i = 0; i <16; i++)
 			// {
@@ -2102,7 +2141,6 @@ class catheter : public render_entity
 				
 				int col_ind = det.check_collision(base_node);
 				// collision detected
-				// std::cout << __LINE__ << std::endl;
 
 				// @todo: fix this if. Keeping for reference for now.
 				if(false)
@@ -2111,15 +2149,11 @@ class catheter : public render_entity
 					
 					
 					
-					std::cout << __LINE__ << std::endl;
 					vector input_motion = vector(x,y);
-					std::cout << __LINE__ << std::endl;
 					vector obstacle_norm = det.get_obs_norm(base_node->get_pos(0), base_node->get_pos(1));
-					std::cout << __LINE__ << std::endl;
 					std::cout << "input motion" << input_motion.to_string() << std::endl;
 					std::cout << "obstacle norm being removed" << obstacle_norm.to_string() << std::endl;
 					vector constrained_motion = input_motion.remove_component(obstacle_norm);
-					std::cout << __LINE__ << std::endl;
 
 					// // this is the direction of the wall, not the normal
 					// vector constraint = det.get_constraint_vec(col_ind);
@@ -2170,19 +2204,13 @@ class catheter : public render_entity
 
 			node->reset();
 			double penetration_dist = det.get_penetration_dist(node);
-			if(penetration_dist>pen_lim)
-			{
-				std::cout << "reset penetration dist from " << penetration_dist << "to " << pen_lim << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!"<<  std::endl;
-				penetration_dist = pen_lim;
-			}
-			else
-			{
-				std::cout << "penetration distance " << penetration_dist <<std::endl;
-			}
+			// std::cout << "penetration distance: " << penetration_dist << std::endl;
 			vector obstacle_norm = det.get_obs_norm(node->get_pos(0), node->get_pos(1));
-			node->add_accel(obstacle_norm*-1*spring_const*penetration_dist);
-			std::cout << "applied accel" << (obstacle_norm*-1*spring_const*penetration_dist).to_string() << std::endl;
-			node->move(dt);
+			// std::cout << "motion direction : " << obstacle_norm.to_string() << std::endl;
+
+			vector motion = obstacle_norm*penetration_dist*-1;
+			// std::cout << "moving to " << motion.to_string() << std::endl;
+			node->move_rel_pos(motion.at(0), motion.at(1));
 		}
 
 		void resolve_nd_split(node* node1, node* node2, double dt, double spring_const)
@@ -2191,14 +2219,13 @@ class catheter : public render_entity
 			node2->reset();
 			double split_penetration_dist = det.get_split_penetration_dist(node1,node2);
 			
-			std::cout << "split penetration distance " << split_penetration_dist << std::endl;
+			// std::cout << "split penetration distance " << split_penetration_dist << std::endl;
 			
 			vector obstacle_norm = det.get_obs_norm((node1->get_pos(0)+node2->get_pos(0))/2, (node1->get_pos(1)+node2->get_pos(1))/2);
-			node1->add_accel(obstacle_norm*-1*spring_const*split_penetration_dist*2);
-			node2->add_accel(obstacle_norm*-1*spring_const*split_penetration_dist*2);
-			std::cout << "applied accel" << (obstacle_norm*-1*spring_const*split_penetration_dist*2).to_string() << std::endl;
-			node1->move(dt);
-			node2->move(dt);
+			vector motion = obstacle_norm*split_penetration_dist*-1;
+			node1->move_rel_pos(motion.at(0), motion.at(1));
+			node2->move_rel_pos(motion.at(0), motion.at(1));
+
 		}
 
 		void update(double dt)
@@ -2210,10 +2237,18 @@ class catheter : public render_entity
 			{
 				// std::cout << "Detected collision on input node" << std::endl;
 				resolve_penetration(nodes[0],dt, obstacle_spring_const);
+
 			}
+
 			nodes[0]->reset();
 			nodes[0]->enforce_dist_constraint(nullptr,dt);
-			nodes[1]->move(dt);
+			
+			vector downstream_disp = nodes[1]->move(dt);
+			// blindly displaces all following nodes
+			for(int j = 2; j < num_nodes; j++)
+			{
+				nodes[j]->move_rel_pos(downstream_disp);
+			}
 
 			// iterates through all nonterminal nodes
 			for(int i = 1; i < num_nodes-1; i ++)
@@ -2222,12 +2257,11 @@ class catheter : public render_entity
 
 				if(-1 != det.check_collision(nodes[i+1]))
 				{
-					// std::cout << "\t old acc: " << nodes[i+1]->acc.to_string() << " new acc:  ";
-					// vector obstacle_norm = det.get_obs_norm(nodes[i+1]->get_pos(0), nodes[i+1]->get_pos(1));
-					// nodes[i+1]->apply_constraint(obstacle_norm);
-					// std::cout << nodes[i+1]->acc.to_string()  << std::endl;
 					resolve_penetration(nodes[i+1], dt, obstacle_spring_const);
 				}
+
+				// std::cout << "node " << i << nodes[i]->to_string()<<std::endl;
+				// std::cout << "node " << i+1 <<  nodes[i+1]->to_string()<<std::endl;
 
 				// checks segment collision
 				if(seg_collision(nodes[i], nodes[i+1]))
@@ -2237,6 +2271,7 @@ class catheter : public render_entity
 
 				// std::cout << "enforcing distance constraint for node " <<  std::to_string(i) << "....";
 				nodes[i]->enforce_dist_constraint(nodes[i-1],dt);
+
 				// std::cout << "done" << std::endl;
 				// std::cout << "distance constraint enforced. " <<  std::to_string(i) << std::endl;
 				
@@ -2268,15 +2303,17 @@ class catheter : public render_entity
 				// std::cout << "node " << std::to_string(i)<< " pushing node  " << std::to_string(i+1) << ": " << nodes[i+1]->to_string() << std::endl;
 				// std::cout << "Acceleration after adding bending and constraints: " << nodes[i]->get_acc().to_string() << std::endl;
 				
-				// moved to before the collision detection 
-				nodes[i+1]->move(dt);
-				
-				
-
+				vector downstream_disp = nodes[i+1]->move(dt);
+				// blindly displaces all following nodes
+				for(int j = i+2; j < num_nodes; j++)
+				{
+					nodes[j]->move_rel_pos(downstream_disp);
+				}
 
 									
 			}
 			nodes[num_nodes-1]->reset();
+
 			// std::cout << "---------------------------------" << std::endl;
 
 		}
@@ -2407,12 +2444,17 @@ class catheter : public render_entity
 		// checks collision between nodes 
 		bool seg_collision(node* nd1, node* nd2)
 		{
+
 			// could be split by an obstacle.
-			if(1 == det.check_collision(nd1) && 1 == det.check_collision(nd2))
+			// if(1 == det.check_collision(nd1) && 1 == det.check_collision(nd2))
+			if(det.get_penetration_dist(nd1)<1.5*nd1->get_rad() && det.get_penetration_dist(nd2)<1.5*nd2->get_rad())
 			{
+				// std::cout << nd1->to_string() <<std::endl;
+				// std::cout << nd2->to_string() <<std::endl;
 				double split_penetration_dist = det.get_split_penetration_dist(nd1,nd2);
 				double penetration_dist1 = det.get_penetration_dist(nd1);
 				double penetration_dist2 = det.get_penetration_dist(nd2);
+
 				if(split_penetration_dist>penetration_dist1 || split_penetration_dist>penetration_dist2)
 				{
 					// std::cout << "split penetration distance " << split_penetration_dist << std::endl;
@@ -2420,7 +2462,6 @@ class catheter : public render_entity
 					// std::cout << "penetration distance 2 " << penetration_dist2 << std::endl;
 					return true;
 				}
-
 			}
 			return false;
 		}
@@ -2462,46 +2503,12 @@ int main()
 	double x_dir = 1;
 	double y_dir = 0;
 	double joint_dist = 3;
-	int num_segs = 12;
+	int num_segs = 8;
 	double node_rad = 0.445/2;
 	double spring_const = 70;
 
 	// collisoion detection params
 	double cd_res = 0.25;
-
-	// // add closed obstacles
-	// std::vector<vector> obs_corners1;
-	// obs_corners1.emplace_back(60,60); 
-	// obs_corners1.emplace_back(70,60); 
-	// obs_corners1.emplace_back(70,45); 
-
-
-	// std::vector<vector> obs_corners2;
-	// obs_corners2.emplace_back(20,40); 
-	// obs_corners2.emplace_back(100,40); 
-	// obs_corners2.emplace_back(100,20); 
-	// obs_corners2.emplace_back(20,20); 
-
-	// std::vector<vector> obs_corners3;
-	// obs_corners3.emplace_back(80,40); 
-	// obs_corners3.emplace_back(90,40); 
-	// obs_corners3.emplace_back(90,50); 
-
-	// std::vector<vector> obs_corners4;
-	// obs_corners4.emplace_back(20,60); 
-	// obs_corners4.emplace_back(100,60); 
-	// obs_corners4.emplace_back(100,90); 
-	// obs_corners4.emplace_back(20,90); 
-
-	// closed_obstacle temp_obs = closed_obstacle(obs_corners1);
-	// obs.push_back(temp_obs);
-	// temp_obs = closed_obstacle(obs_corners2);
-	// obs.push_back(temp_obs);
-	// temp_obs = closed_obstacle(obs_corners3);
-	// obs.push_back(temp_obs);
-	// temp_obs = closed_obstacle(obs_corners4);
-	// obs.push_back(temp_obs);
-	// obs.push_back(temp_obs.transform(vector(20,20)));
 
 	environment env = environment("environments/simple_split.txt");
 	std::vector<closed_obstacle> obs;
@@ -2510,8 +2517,6 @@ int main()
 
 
 	collision_detector cd(obs, window_width,window_height, cd_res, node_rad);
-
-	// std::cout << "1 " << (long long int )(cd.dist_field.sdf) << std::endl;
 
 	std::cout << "CD build complete. " << std::endl;
 
