@@ -1530,7 +1530,7 @@ class sdf2D: public render_entity
 					}
 				}
 			}
-			return vector(directs[min_ind][0], directs[min_ind][1] );
+			return vector(directs[min_ind][0], directs[min_ind][1] ).normalize();
 
 			// for(int i = 0; i <16; i++)
 			// {
@@ -2140,7 +2140,6 @@ class catheter : public render_entity
 				
 				int col_ind = det.check_collision(base_node);
 				// collision detected
-				// std::cout << __LINE__ << std::endl;
 
 				// @todo: fix this if. Keeping for reference for now.
 				if(false)
@@ -2149,15 +2148,11 @@ class catheter : public render_entity
 					
 					
 					
-					std::cout << __LINE__ << std::endl;
 					vector input_motion = vector(x,y);
-					std::cout << __LINE__ << std::endl;
 					vector obstacle_norm = det.get_obs_norm(base_node->get_pos(0), base_node->get_pos(1));
-					std::cout << __LINE__ << std::endl;
 					std::cout << "input motion" << input_motion.to_string() << std::endl;
 					std::cout << "obstacle norm being removed" << obstacle_norm.to_string() << std::endl;
 					vector constrained_motion = input_motion.remove_component(obstacle_norm);
-					std::cout << __LINE__ << std::endl;
 
 					// // this is the direction of the wall, not the normal
 					// vector constraint = det.get_constraint_vec(col_ind);
@@ -2208,10 +2203,12 @@ class catheter : public render_entity
 
 			node->reset();
 			double penetration_dist = det.get_penetration_dist(node);
-
+			// std::cout << "penetration distance: " << penetration_dist << std::endl;
 			vector obstacle_norm = det.get_obs_norm(node->get_pos(0), node->get_pos(1));
+			// std::cout << "motion direction : " << obstacle_norm.to_string() << std::endl;
 
 			vector motion = obstacle_norm*penetration_dist*-1;
+			// std::cout << "moving to " << motion.to_string() << std::endl;
 			node->move_rel_pos(motion.at(0), motion.at(1));
 		}
 
@@ -2221,7 +2218,7 @@ class catheter : public render_entity
 			node2->reset();
 			double split_penetration_dist = det.get_split_penetration_dist(node1,node2);
 			
-			std::cout << "split penetration distance " << split_penetration_dist << std::endl;
+			// std::cout << "split penetration distance " << split_penetration_dist << std::endl;
 			
 			vector obstacle_norm = det.get_obs_norm((node1->get_pos(0)+node2->get_pos(0))/2, (node1->get_pos(1)+node2->get_pos(1))/2);
 			vector motion = obstacle_norm*split_penetration_dist*-1;
@@ -2235,49 +2232,38 @@ class catheter : public render_entity
 			double obstacle_spring_const = 50;
 			int col_ind = -1;
 			
-			std::cout << __LINE__ << std::endl;
 			if(-1 != det.check_collision(nodes[0]))
 			{
 				// std::cout << "Detected collision on input node" << std::endl;
-				std::cout << __LINE__ << std::endl;
 				resolve_penetration(nodes[0],dt, obstacle_spring_const);
 
 			}
-			std::cout << __LINE__ << std::endl;
 
 			nodes[0]->reset();
 			nodes[0]->enforce_dist_constraint(nullptr,dt);
 			nodes[1]->move(dt);
-			std::cout << __LINE__ << std::endl;
 
 			// iterates through all nonterminal nodes
 			for(int i = 1; i < num_nodes-1; i ++)
 			{
-				std::cout << __LINE__ << std::endl;
-
 				nodes[i]->reset();
 
 				if(-1 != det.check_collision(nodes[i+1]))
 				{
-					std::cout << __LINE__ << std::endl;
 					resolve_penetration(nodes[i+1], dt, obstacle_spring_const);
 				}
 
-				std::cout << __LINE__ << std::endl;
-				std::cout << nodes[i]->to_string()<<std::endl;
-				std::cout << nodes[i+1]->to_string()<<std::endl;
+				// std::cout << "node " << i << nodes[i]->to_string()<<std::endl;
+				// std::cout << "node " << i+1 <<  nodes[i+1]->to_string()<<std::endl;
 
 				// checks segment collision
 				if(seg_collision(nodes[i], nodes[i+1]))
 				{
-					std::cout << __LINE__ << std::endl;
 					resolve_nd_split(nodes[i], nodes[i+1], dt, obstacle_spring_const);
 				}
-				std::cout << __LINE__ << std::endl;
 
 				// std::cout << "enforcing distance constraint for node " <<  std::to_string(i) << "....";
 				nodes[i]->enforce_dist_constraint(nodes[i-1],dt);
-				std::cout << __LINE__ << std::endl;
 
 				// std::cout << "done" << std::endl;
 				// std::cout << "distance constraint enforced. " <<  std::to_string(i) << std::endl;
@@ -2287,45 +2273,34 @@ class catheter : public render_entity
 				// angle is too sudden.
 				if(i>1 && nodes[i]->get_angle_dif()>PI/5)
 				{
-					std::cout << __LINE__ << std::endl;
 					double center_diff = nodes[i]->get_angle_dif();
 					double neutral_old = nodes[i-1]->get_neutral_angle();
 					nodes[i-1]->update_neutral_angle(neutral_old-(center_diff)/2);
 					nodes[i-1]->apply_bending_force(nodes[i-2]); //applies force to current node
 					nodes[i-1]->enforce_dist_constraint(nodes[i-2],dt);
-					std::cout << __LINE__ << std::endl;
 
 					nodes[i]->move(dt);	//moves current node
 					nodes[i-1]->update_neutral_angle(neutral_old); //resets old node
 
 					nodes[i]->apply_bending_force(nodes[i-1]); //moves next node
-					std::cout << __LINE__ << std::endl;
 
 
 				}
 				// respond normally
 				else
 				{
-					std::cout << __LINE__ << std::endl;
 					nodes[i]->apply_bending_force(nodes[i-1]);
 				}
 				// std::cout << "\tdone" << std::endl;
-				std::cout << __LINE__ << std::endl;
 
 				// std::cout << "node " << std::to_string(i)<< " pushing node  " << std::to_string(i+1) << ": " << nodes[i+1]->to_string() << std::endl;
 				// std::cout << "Acceleration after adding bending and constraints: " << nodes[i]->get_acc().to_string() << std::endl;
 				
 				// moved to before the collision detection 
 				nodes[i+1]->move(dt);
-				std::cout << __LINE__ << std::endl;
-				
-				
-
-
 									
 			}
 			nodes[num_nodes-1]->reset();
-			std::cout << __LINE__ << std::endl;
 
 			// std::cout << "---------------------------------" << std::endl;
 
@@ -2459,28 +2434,23 @@ class catheter : public render_entity
 		{
 
 			// could be split by an obstacle.
-			if(1 == det.check_collision(nd1) && 1 == det.check_collision(nd2))
+			// if(1 == det.check_collision(nd1) && 1 == det.check_collision(nd2))
+			if(det.get_penetration_dist(nd1)<1.5*nd1->get_rad() && det.get_penetration_dist(nd2)<1.5*nd2->get_rad())
 			{
-				std::cout << __LINE__ << std::endl;
-				std::cout << nd1->to_string() <<std::endl;
-				std::cout << nd2->to_string() <<std::endl;
+				// std::cout << nd1->to_string() <<std::endl;
+				// std::cout << nd2->to_string() <<std::endl;
 				double split_penetration_dist = det.get_split_penetration_dist(nd1,nd2);
-				std::cout << __LINE__ << std::endl;
 				double penetration_dist1 = det.get_penetration_dist(nd1);
-				std::cout << __LINE__ << std::endl;
 				double penetration_dist2 = det.get_penetration_dist(nd2);
-				std::cout << __LINE__ << std::endl;
+
 				if(split_penetration_dist>penetration_dist1 || split_penetration_dist>penetration_dist2)
 				{
-					std::cout << __LINE__ << std::endl;
 					// std::cout << "split penetration distance " << split_penetration_dist << std::endl;
 					// std::cout << "penetration distance 1" << penetration_dist1 << std::endl;
 					// std::cout << "penetration distance 2 " << penetration_dist2 << std::endl;
 					return true;
 				}
-				std::cout << __LINE__ << std::endl;
 			}
-			std::cout << __LINE__ << std::endl;
 			return false;
 		}
 
