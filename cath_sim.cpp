@@ -273,7 +273,7 @@ class render_entity
 		const int X = 0;
 		const int Y = 1;
 
-		double scale = 6; // pixels/sim unit
+		double scale = 2.5; // pixels/sim unit
 		
 
 		// @TODO: Add x rendering criteria too
@@ -1032,14 +1032,20 @@ class closed_obstacle
 		void calculate_center()
 		{
 			double x_cent = 0, y_cent = 0, x_temp, y_temp;
+			// std::cout << "Reference points:"<< std::endl;
 			for(int i = 0; i < num_sides; i++)
 			{
+				
 				// only need the first one because
 				lines[i].get_p1(x_temp, y_temp);
+				// std::cout << "\t" << x_temp << ", " << y_temp << std::endl;
 				x_cent +=x_temp;
 				y_cent += y_temp;
 			}
+			// std::cout << "Center: " << std::endl;
 			center = vector(x_cent/num_sides, y_cent/num_sides);
+			// std::cout << center.to_string() << std::endl;
+			// std::cout << "----------------------" << std::endl;
 		}
 
 
@@ -1231,11 +1237,9 @@ class sdf2D: public render_entity
 
 			fill_sdf(obstacles);
 
-			// // h range 4-6
-			// // v range 11 - 13
 			// int x_low, x_high, y_low, y_high;
-			// real_to_sdf(x_low, y_low, 4.8,6.5);
-			// real_to_sdf(x_high, y_high, 5.5,7.25);
+			// real_to_sdf(x_low, y_low, 217,120);
+			// real_to_sdf(x_high, y_high, 225,140);
 			// std::cout << "x window: " << x_low << ", " << x_high << "\t y window" << y_low << ", " << y_high << std::endl;
 			// // print all values in sdf
 			// for(int j = y_high; j > y_low; j--)
@@ -1342,8 +1346,15 @@ class sdf2D: public render_entity
 			for(closed_obstacle obs:obstacles)
 			{
 				std::tuple<int,int> temp_pos = real_to_sdf(obs.get_center().at(0), obs.get_center().at(1));
-				set_sdf_val(temp_pos, -1*get_sdf_val(temp_pos));
-				q.push(temp_pos);
+				if(get_sdf_val(temp_pos) != 0)
+				{
+					set_sdf_val(temp_pos, -1*get_sdf_val(temp_pos));
+					q.push(temp_pos);
+				}
+				else
+				{
+					// std::cout << "!!!!!!!!! Triangle too small to negate center!" << std::endl;
+				}
 			}
 
 			run_neg_wavefront(q);
@@ -2498,10 +2509,10 @@ int main()
 	// assume that scale is at 1000 sim units = 1 "real" meter. 1 sim = 1 mm
 
 	// catheter params
-	double x_start = 10;
-	double y_start = 40;
-	double x_dir = 1;
-	double y_dir = 0;
+	double x_start = 2;
+	double y_start = 10;
+	double x_dir = 0;
+	double y_dir = 1;
 	double joint_dist = 3;
 	int num_segs = 8;
 	double node_rad = 0.445/2;
@@ -2510,7 +2521,7 @@ int main()
 	// collisoion detection params
 	double cd_res = 0.25;
 
-	environment env = environment("environments/simple_split.txt");
+	environment env = environment("environments/neuro_model_tris.txt");
 	std::vector<closed_obstacle> obs;
 	obs = env.get_obs();
 
