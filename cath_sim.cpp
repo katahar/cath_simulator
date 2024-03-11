@@ -2510,9 +2510,9 @@ int main()
 
 	// catheter params
 	double x_start = 2;
-	double y_start = 10;
-	double x_dir = 0;
-	double y_dir = 1;
+	double y_start = 110;
+	double x_dir = 1;
+	double y_dir = 0;
 	double joint_dist = 3;
 	int num_segs = 8;
 	double node_rad = 0.445/2;
