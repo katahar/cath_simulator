@@ -56,12 +56,6 @@ class vector
 
 		vector(const vector& other)
 		{
-			// this->dims = other.dims;
-			// vec = new double[dims];
-			// for(int i = 0; i < dims; i++)
-			// {
-			// 	this->vec[i] = other.vec[i];
-			// }
 			this->copy(other);
 		}
 
@@ -93,6 +87,46 @@ class vector
 				}
 			}
 			return 0;
+		}
+
+		vector cross3d(vector other_vec)
+		{
+			if(is_compatible(other_vec))
+			{
+				if(3 == dims)
+				{
+					// this is a, other is B
+					double x, y ,z;
+					x = (this->vec[1]*other_vec.vec[2]) - (this->vec[2]*other_vec.vec[1]);
+					y = -1*( (this->vec[0]*other_vec.vec[2]) - (this->vec[2]*other_vec.vec[0]) );
+					z = (this->vec[0]*other_vec.vec[1]) - (this->vec[1]*other_vec.vec[0]);
+					vector ret_vec = vector(x,y,z);
+					return ret_vec;
+				}
+				else
+				{
+					std::cout << "ERROR: attempting to complete a 3D cross product on a vector of dimension " << dims << std::endl;
+				}
+			}
+			return vector(0,0,0);
+		}
+
+		// returns the z component only.
+		double cross2d(vector other_vec)
+		{
+			if(is_compatible(other_vec))
+			{
+				if(2 == dims)
+				{
+					// this is a, other is B
+					return  (this->vec[0]*other_vec.vec[1]) - (this->vec[1]*other_vec.vec[0]);
+				}
+				else
+				{
+					std::cout << "ERROR: attempting to complete a 2D cross product on a vector of dimension " << dims << std::endl;
+				}
+			}
+			return NULL;
 		}
 
 		double at(int ind)
@@ -911,11 +945,12 @@ class line_obstacle: public render_entity
 
 };
 
-class closed_obstacle
+class closed_obstacle: public render_entity
 {
 	public: 
 		// in global frame.
 		std::vector<line_obstacle> lines;
+		std::vector<vector> points;
 		int num_sides;
 
 		// in global frame. Never manually assigned. Always derived
@@ -935,13 +970,16 @@ class closed_obstacle
 		{
 			this->lines = lines;
 			num_sides = lines.size();
+			this->extract_vertices();
 			this->calculate_center();
+
 		}
 
 		// populates from a vector of corner points
 		closed_obstacle(std::vector<vector> points)
 		{
 			this->num_sides = points.size();
+			this->points = points;
 			for(int i = 0; i < num_sides-1; i++)
 			{
 				line_obstacle temp_line = line_obstacle(points[i].at(0),points[i].at(1), points[i+1].at(0),points[i+1].at(1) );
@@ -1007,6 +1045,14 @@ class closed_obstacle
 			{
 				ln.draw();
 			}
+			
+			glColor3ub(255,0,0);
+			int sRad, sx, sy;
+			render_entity::PhysicalCoordToScreenDim(sRad, 2);
+			render_entity::PhysicalCoordToScreenCoord(sx,sy,center.at(render_entity::X), center.at(render_entity::Y));
+			render_entity::DrawCircle(sx,sy,render_entity::scale*0.5,true);
+
+
 		}
 
 		std::string to_string()
@@ -1025,27 +1071,200 @@ class closed_obstacle
 		{
 			this->lines = input.lines;
 			this->num_sides = lines.size();
-
-			this->calculate_center();
+			this->points = input.points;
+			this->center = input.center;
 		}
+
+		// from https://stackoverflow.com/questions/471962/how-do-i-efficiently-determine-if-a-polygon-is-convex-non-convex-or-complex
+		bool is_convex()
+		{
+			bool is_negative;
+			
+			// @todo: update to use vectors
+			// evaluating cross product between 0->1 and 0->num_sides-1
+			double dx1 = points[1].at(render_entity::X)-points[0].at(render_entity::X);
+			double dy1 = points[1].at(render_entity::Y)-points[0].at(render_entity::Y);
+			double dx2 = points[num_sides-1].at(render_entity::X)-points[0].at(render_entity::X);
+			double dy2 = points[num_sides-1].at(render_entity::Y)-points[0].at(render_entity::Y);
+			double zcrossproduct = dx1*dy2 - dy1*dx2;
+
+			is_negative = signbit(zcrossproduct);
+
+			for(int i = 1; i < num_sides-1; i++)
+			{
+				dx1 = points[i+1].at(render_entity::X)-points[i].at(render_entity::X);
+				dy1 = points[i+1].at(render_entity::Y)-points[i].at(render_entity::Y);
+				dx2 = points[i-1].at(render_entity::X)-points[i].at(render_entity::X);
+				dy2 = points[i-1].at(render_entity::Y)-points[i].at(render_entity::Y);
+				zcrossproduct = dx1*dy2 - dy1*dx2;
+
+				if(is_negative != signbit(zcrossproduct))
+				{
+					return false;
+				}
+
+			}
+
+			return true;
+		}
+
+		double triangle_area(double x1, double y1, double x2, double y2, double x3, double y3)
+		{
+			return abs((x1*(y2-y3) + x2*(y3-y1)+ x3*(y1-y2))/2.0);
+
+		}
+
+		/* A function to check whether point P(x, y) lies inside the triangle formed 
+		by A(x1, y1), B(x2, y2) and C(x3, y3) */
+		bool isInside(double x, double y, double x1, double y1, double x2, double y2, double x3, double y3)
+		{   
+			/* Calculate area of triangle ABC */
+			double A = triangle_area(x1, y1, x2, y2, x3, y3);
+			
+			/* Calculate area of triangle PBC */ 
+			double A1 = triangle_area(x, y, x2, y2, x3, y3);
+			
+			/* Calculate area of triangle PAC */ 
+			double A2 = triangle_area(x1, y1, x, y, x3, y3);
+			
+			/* Calculate area of triangle PAB */  
+			double A3 = triangle_area(x1, y1, x2, y2, x, y);
+				
+			/* Check if sum of A1, A2 and A3 is same as A */
+			if((A == A1 + A2 + A3))
+			{
+				std::cout << "A = " << A << ", A1 = " << A1 << ", A2 = " << A2 << "A3 = " << A3 <<std::endl;
+			}
+			return (A == A1 + A2 + A3);
+		}
+
+		// verifies that no other points are in the triangle specified by points at the indeces
+		bool no_points_inside(int ind0, int ind1, int ind2)
+		{
+			for(int i = 0; i < num_sides; i++)
+			{
+				if ( i!=ind0 && i!=ind1 && i!=ind2)
+				{
+					if(isInside(points[i].at(render_entity::X), points[i].at(render_entity::Y), 
+								points[ind0].at(render_entity::X), points[ind0].at(render_entity::Y), 
+								points[ind1].at(render_entity::X), points[ind1].at(render_entity::Y),
+								points[ind2].at(render_entity::X), points[ind2].at(render_entity::Y) ))
+							{
+								std::cout << "point inside! " << points[i].to_string() << std::endl;
+								return false;
+							}
+				}
+			}
+			return true;
+		}
+
+		void get_centroid(double& centX, double& centY, int ind0, int ind1, int ind2)
+		{
+			centX =(points[ind0].at(render_entity::X)+points[ind1].at(render_entity::X)+points[ind2].at(render_entity::X))/3;
+			centY =(points[ind0].at(render_entity::Y)+points[ind1].at(render_entity::Y)+points[ind2].at(render_entity::Y))/3;
+		}
+
 
 		void calculate_center()
 		{
-			double x_cent = 0, y_cent = 0, x_temp, y_temp;
-			// std::cout << "Reference points:"<< std::endl;
+			std::cout << "\n\n" << std::endl;
+			std::cout << this->num_sides << std::endl;	
+			// a convex polygon
+			if( this->is_convex())
+			{
+				std::cout << "convex!" << std::endl;
+				double x_cent = 0, y_cent = 0, x_temp, y_temp;
+				// std::cout << "Reference points:"<< std::endl;
+				for(int i = 0; i < num_sides; i++)
+				{
+					
+					x_cent += points[i].at(render_entity::X);
+					y_cent += points[i].at(render_entity::Y);
+					lines[i].get_p1(x_temp, y_temp);
+					
+				}
+				center = vector(x_cent/num_sides, y_cent/num_sides);
+			}
+			else
+			{
+				// find a vertex where the interior angle is less than 80. ear clipping assumes that vertices are CLOCKWISE. This breaks otherwise.
+		
+				vector A = points[num_sides-1] - points[0];
+				vector B = points[1] - points[0];
+				double angle = atan2(B.at(1), B.at(0))-atan2(A.at(1), A.at(0));
+				// // normalize it to the range [0, 2 π):
+				if (angle < 0) {angle  += 2 *PI; }			
+
+
+
+				std::cout << "evaluating " ; 
+				std::cout <<"center: " << points[0].to_string() << std::endl;
+				std::cout <<"after (left): " << points[1].to_string() << std::endl;
+				std::cout <<"before (right): " << points[num_sides-1].to_string() << std::endl;
+				std::cout << "angle " << angle << " " << (angle<PI) << std::endl;
+				std::cout << "no points inside " << no_points_inside(0,1,num_sides-1) << std::endl;
+
+				if(angle < PI && no_points_inside(0,1,num_sides-1))
+				{
+					double x_cent = 0, y_cent = 0;
+					get_centroid(x_cent, y_cent, 0,1,num_sides-1);
+					center = vector(x_cent, y_cent);
+					std::cout << "interior point found !! " << std::endl;
+					std::cout << center.to_string() << std::endl;
+					return;
+				}
+				
+				//the rest
+				std::cout << __LINE__ << std::endl;
+				for(int i = 1; i < num_sides+1; i++ )
+				{
+					int ind0 = i-1%num_sides;
+					int ind1 = (i)%num_sides;
+					int ind2 = (i+1)%num_sides;
+					
+					vector A = points[ind0] - points[ind1]; ///right
+					vector B = points[ind2] - points[ind1]; //left
+					double angle = atan2(B.at(1), B.at(0))-atan2(A.at(1), A.at(0));
+					// // normalize it to the range [0, 2 π):
+					if (angle < 0) {angle  += 2 *PI; }			
+
+					std::cout << "evaluating " ; 
+					std::cout <<"center: " << points[ind1].to_string() << std::endl;
+					std::cout <<"after (left): " << points[ind2].to_string() << std::endl;
+					std::cout <<"before (right): " << points[ind0].to_string() << std::endl;
+					std::cout << "angle " << angle << " " << (angle<PI) << std::endl;
+					std::cout << "no points inside " << no_points_inside(ind0,ind1,ind2) << std::endl;
+
+					if(angle < PI && no_points_inside(ind0,ind1,ind2))
+					{
+						double x_cent = 0, y_cent = 0;
+						get_centroid(x_cent, y_cent, ind0,ind1,ind2);
+						center = vector(x_cent, y_cent);
+						std::cout << "interior point found ! " << std::endl;
+						std::cout << center.to_string() << std::endl;
+						return;
+					}
+
+
+				}
+				std::cout <<"No center found" << std::endl;
+				std::cout << __LINE__ << std::endl;
+
+
+
+			}
+
+		}
+
+		void extract_vertices()
+		{
 			for(int i = 0; i < num_sides; i++)
 			{
-				
-				// only need the first one because
-				lines[i].get_p1(x_temp, y_temp);
-				// std::cout << "\t" << x_temp << ", " << y_temp << std::endl;
-				x_cent +=x_temp;
-				y_cent += y_temp;
+				double x,y;
+				lines[i].get_p1(x,y);
+				vector temp_point = vector(x,y);
+				points.push_back(temp_point);
 			}
-			// std::cout << "Center: " << std::endl;
-			center = vector(x_cent/num_sides, y_cent/num_sides);
-			// std::cout << center.to_string() << std::endl;
-			// std::cout << "----------------------" << std::endl;
 		}
 
 
@@ -2521,7 +2740,7 @@ int main()
 	// collisoion detection params
 	double cd_res = 0.25;
 
-	environment env = environment("environments/neuro_model_tris.txt");
+	environment env = environment("environments/neuro_model_half.txt");
 	std::vector<closed_obstacle> obs;
 	obs = env.get_obs();
 
