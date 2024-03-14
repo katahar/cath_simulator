@@ -1189,6 +1189,8 @@ class closed_obstacle: public render_entity
 			{
 				// find a vertex where the interior angle is less than 80. ear clipping assumes that vertices are CLOCKWISE. This breaks otherwise.
 		
+				double best_angle_thresh = PI*0.8;
+
 				vector A = points[num_sides-1] - points[0];
 				vector B = points[1] - points[0];
 				double angle = atan2(B.at(1), B.at(0))-atan2(A.at(1), A.at(0));
@@ -1209,11 +1211,14 @@ class closed_obstacle: public render_entity
 					double x_cent = 0, y_cent = 0;
 					get_centroid(x_cent, y_cent, 0,1,num_sides-1);
 					center = vector(x_cent, y_cent);
-					std::cout << "interior point found !! " << std::endl;
-					std::cout << center.to_string() << std::endl;
-					return;
+					if((points[0]-center).get_length() > 0.25)
+					{
+						std::cout << "interior point found !! " << std::endl;
+						std::cout << center.to_string() << std::endl;
+						return;
+					}
 				}
-				
+
 				//the rest
 				std::cout << __LINE__ << std::endl;
 				for(int i = 1; i < num_sides+1; i++ )
@@ -1222,6 +1227,7 @@ class closed_obstacle: public render_entity
 					int ind1 = (i)%num_sides;
 					int ind2 = (i+1)%num_sides;
 					
+
 					vector A = points[ind0] - points[ind1]; ///right
 					vector B = points[ind2] - points[ind1]; //left
 					double angle = atan2(B.at(1), B.at(0))-atan2(A.at(1), A.at(0));
@@ -1240,11 +1246,14 @@ class closed_obstacle: public render_entity
 						double x_cent = 0, y_cent = 0;
 						get_centroid(x_cent, y_cent, ind0,ind1,ind2);
 						center = vector(x_cent, y_cent);
-						std::cout << "interior point found ! " << std::endl;
-						std::cout << center.to_string() << std::endl;
-						return;
+						if((points[ind1]-center).get_length() > 0.25)
+						{
+							std::cout << "interior point found! Finishing. " << std::endl;
+							std::cout << center.to_string() << std::endl;
+							return;
+						}
+						
 					}
-
 
 				}
 				std::cout <<"No center found" << std::endl;
