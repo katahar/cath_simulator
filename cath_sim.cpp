@@ -966,17 +966,17 @@ class closed_obstacle: public render_entity
 			copy(input);
 		}
 
-		closed_obstacle(std::vector<line_obstacle> lines)
+		closed_obstacle(std::vector<line_obstacle> lines, double resolution)
 		{
 			this->lines = lines;
 			num_sides = lines.size();
 			this->extract_vertices();
-			this->calculate_center();
+			this->calculate_center(resolution);
 
 		}
 
 		// populates from a vector of corner points
-		closed_obstacle(std::vector<vector> points)
+		closed_obstacle(std::vector<vector> points, double resolution)
 		{
 			this->num_sides = points.size();
 			this->points = points;
@@ -989,7 +989,7 @@ class closed_obstacle: public render_entity
 			line_obstacle temp_line = line_obstacle(points[num_sides-1].at(0),points[num_sides-1].at(1), points[0].at(0),points[0].at(1));
 			this->lines.push_back(temp_line);
 
-			this->calculate_center();
+			this->calculate_center(resolution);
 
 		}
 
@@ -1016,7 +1016,7 @@ class closed_obstacle: public render_entity
 		}
 
 		// returns another closed_obstacle recentered at new location. Shape and orientation is maintained
-		closed_obstacle transform(vector new_center)
+		closed_obstacle transform(vector new_center, double resolution)
 		{
 			vector offset = new_center-this->center;
 			
@@ -1030,7 +1030,7 @@ class closed_obstacle: public render_entity
 				new_lines.push_back(temp_line);
 			}
 
-			closed_obstacle ret_obs = closed_obstacle(new_lines);
+			closed_obstacle ret_obs = closed_obstacle(new_lines, resolution);
 			return ret_obs;
 		}
 
@@ -1046,11 +1046,11 @@ class closed_obstacle: public render_entity
 				ln.draw();
 			}
 			
-			glColor3ub(255,0,0);
-			int sRad, sx, sy;
-			render_entity::PhysicalCoordToScreenDim(sRad, 2);
-			render_entity::PhysicalCoordToScreenCoord(sx,sy,center.at(render_entity::X), center.at(render_entity::Y));
-			render_entity::DrawCircle(sx,sy,render_entity::scale*0.5,true);
+			// glColor3ub(255,0,0);
+			// int sRad, sx, sy;
+			// render_entity::PhysicalCoordToScreenDim(sRad, 2);
+			// render_entity::PhysicalCoordToScreenCoord(sx,sy,center.at(render_entity::X), center.at(render_entity::Y));
+			// render_entity::DrawCircle(sx,sy,render_entity::scale*0.5,true);
 
 
 		}
@@ -1150,7 +1150,7 @@ class closed_obstacle: public render_entity
 								points[ind1].at(render_entity::X), points[ind1].at(render_entity::Y),
 								points[ind2].at(render_entity::X), points[ind2].at(render_entity::Y) ))
 							{
-								std::cout << "point inside! " << points[i].to_string() << std::endl;
+								// std::cout << "point inside! " << points[i].to_string() << std::endl;
 								return false;
 							}
 				}
@@ -1165,7 +1165,7 @@ class closed_obstacle: public render_entity
 		}
 
 
-		void calculate_center()
+		void calculate_center(double resolution)
 		{
 			// std::cout << "\n\n" << std::endl;
 			// std::cout << this->num_sides << std::endl;	
@@ -1189,7 +1189,7 @@ class closed_obstacle: public render_entity
 			{
 				// find a vertex where the interior angle is less than 80. ear clipping assumes that vertices are CLOCKWISE. This breaks otherwise.
 		
-				double best_angle_thresh = PI*0.8;
+				double resolution = 0.25;
 
 				vector A = points[num_sides-1] - points[0];
 				vector B = points[1] - points[0];
@@ -1211,7 +1211,7 @@ class closed_obstacle: public render_entity
 					double x_cent = 0, y_cent = 0;
 					get_centroid(x_cent, y_cent, 0,1,num_sides-1);
 					center = vector(x_cent, y_cent);
-					if((points[0]-center).get_length() > 0.25)
+					if((points[0]-center).get_length() > resolution)
 					{
 						// std::cout << "interior point found !! " << std::endl;
 						// std::cout << center.to_string() << std::endl;
@@ -1246,7 +1246,7 @@ class closed_obstacle: public render_entity
 						double x_cent = 0, y_cent = 0;
 						get_centroid(x_cent, y_cent, ind0,ind1,ind2);
 						center = vector(x_cent, y_cent);
-						if((points[ind1]-center).get_length() > 0.25)
+						if((points[ind1]-center).get_length() > resolution)
 						{
 							// std::cout << "interior point found! Finishing. " << std::endl;
 							// std::cout << center.to_string() << std::endl;
@@ -1971,9 +1971,9 @@ class environment
 	public: 
 		std::vector<closed_obstacle> obs;
 
-		environment(std::string obs_file)
+		environment(std::string obs_file, double resolution)
 		{
-			obs = import_obstacles(obs_file);
+			obs = import_obstacles(obs_file, resolution);
 		}
 
 		environment(const environment &incoming)
@@ -1987,7 +1987,7 @@ class environment
 		}
 
 
-		std::vector<closed_obstacle> import_obstacles(std::string file)
+		std::vector<closed_obstacle> import_obstacles(std::string file, double resolution)
 		{
 			std::cout << "\n\nImporting environment" << std::endl;
 
@@ -2030,7 +2030,7 @@ class environment
 					std::getline(obs_file, line);
 
 					// corners to a closed obstacle
-					closed_obstacle temp_obs = closed_obstacle(obs_corners);
+					closed_obstacle temp_obs = closed_obstacle(obs_corners, resolution);
 					obs.push_back(temp_obs);
 					
 				}
@@ -2749,7 +2749,7 @@ int main()
 	// collisoion detection params
 	double cd_res = 0.25;
 
-	environment env = environment("environments/neuro_model_half.txt");
+	environment env = environment("environments/neuro_model_half.txt", cd_res);
 	std::vector<closed_obstacle> obs;
 	obs = env.get_obs();
 
