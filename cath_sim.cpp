@@ -1167,12 +1167,12 @@ class closed_obstacle: public render_entity
 
 		void calculate_center()
 		{
-			std::cout << "\n\n" << std::endl;
-			std::cout << this->num_sides << std::endl;	
+			// std::cout << "\n\n" << std::endl;
+			// std::cout << this->num_sides << std::endl;	
 			// a convex polygon
 			if( this->is_convex())
 			{
-				std::cout << "convex!" << std::endl;
+				// std::cout << "convex!" << std::endl;
 				double x_cent = 0, y_cent = 0, x_temp, y_temp;
 				// std::cout << "Reference points:"<< std::endl;
 				for(int i = 0; i < num_sides; i++)
@@ -1199,12 +1199,12 @@ class closed_obstacle: public render_entity
 
 
 
-				std::cout << "evaluating " ; 
-				std::cout <<"center: " << points[0].to_string() << std::endl;
-				std::cout <<"after (left): " << points[1].to_string() << std::endl;
-				std::cout <<"before (right): " << points[num_sides-1].to_string() << std::endl;
-				std::cout << "angle " << angle << " " << (angle<PI) << std::endl;
-				std::cout << "no points inside " << no_points_inside(0,1,num_sides-1) << std::endl;
+				// std::cout << "evaluating " ; 
+				// std::cout <<"center: " << points[0].to_string() << std::endl;
+				// std::cout <<"after (left): " << points[1].to_string() << std::endl;
+				// std::cout <<"before (right): " << points[num_sides-1].to_string() << std::endl;
+				// std::cout << "angle " << angle << " " << (angle<PI) << std::endl;
+				// std::cout << "no points inside " << no_points_inside(0,1,num_sides-1) << std::endl;
 
 				if(angle < PI && no_points_inside(0,1,num_sides-1))
 				{
@@ -1213,14 +1213,14 @@ class closed_obstacle: public render_entity
 					center = vector(x_cent, y_cent);
 					if((points[0]-center).get_length() > 0.25)
 					{
-						std::cout << "interior point found !! " << std::endl;
-						std::cout << center.to_string() << std::endl;
+						// std::cout << "interior point found !! " << std::endl;
+						// std::cout << center.to_string() << std::endl;
 						return;
 					}
 				}
 
 				//the rest
-				std::cout << __LINE__ << std::endl;
+				// std::cout << __LINE__ << std::endl;
 				for(int i = 1; i < num_sides+1; i++ )
 				{
 					int ind0 = i-1%num_sides;
@@ -1234,12 +1234,12 @@ class closed_obstacle: public render_entity
 					// // normalize it to the range [0, 2 π):
 					if (angle < 0) {angle  += 2 *PI; }			
 
-					std::cout << "evaluating " ; 
-					std::cout <<"center: " << points[ind1].to_string() << std::endl;
-					std::cout <<"after (left): " << points[ind2].to_string() << std::endl;
-					std::cout <<"before (right): " << points[ind0].to_string() << std::endl;
-					std::cout << "angle " << angle << " " << (angle<PI) << std::endl;
-					std::cout << "no points inside " << no_points_inside(ind0,ind1,ind2) << std::endl;
+					// std::cout << "evaluating " ; 
+					// std::cout <<"center: " << points[ind1].to_string() << std::endl;
+					// std::cout <<"after (left): " << points[ind2].to_string() << std::endl;
+					// std::cout <<"before (right): " << points[ind0].to_string() << std::endl;
+					// std::cout << "angle " << angle << " " << (angle<PI) << std::endl;
+					// std::cout << "no points inside " << no_points_inside(ind0,ind1,ind2) << std::endl;
 
 					if(angle < PI && no_points_inside(ind0,ind1,ind2))
 					{
@@ -1248,16 +1248,16 @@ class closed_obstacle: public render_entity
 						center = vector(x_cent, y_cent);
 						if((points[ind1]-center).get_length() > 0.25)
 						{
-							std::cout << "interior point found! Finishing. " << std::endl;
-							std::cout << center.to_string() << std::endl;
+							// std::cout << "interior point found! Finishing. " << std::endl;
+							// std::cout << center.to_string() << std::endl;
 							return;
 						}
 						
 					}
 
 				}
-				std::cout <<"No center found" << std::endl;
-				std::cout << __LINE__ << std::endl;
+				std::cout <<"EROR: Failed to find SDF interior seed point" << std::endl;
+				// std::cout << __LINE__ << std::endl;
 
 
 
@@ -2006,7 +2006,7 @@ class environment
 				// getting the number of polygons (obstacles)
 				std::getline(obs_file, line);
 				int num_obstacles= std::stoi(line);
-				std::cout << "Number of obstacles (triangles) file: " << num_obstacles << std::endl;
+				std::cout << "Number of obstacles in file: " << num_obstacles << std::endl;
 
 				// blank line
 				std::getline(obs_file, line);
