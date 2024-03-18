@@ -307,7 +307,7 @@ class render_entity
 		const int X = 0;
 		const int Y = 1;
 
-		double scale = 2.5; // pixels/sim unit
+		double scale = 2; // pixels/sim unit
 		
 
 		// @TODO: Add x rendering criteria too
@@ -2429,6 +2429,40 @@ class catheter : public render_entity
 
 		}
 
+		void insert(double distance)
+		{
+			for(int i = 0; i < num_nodes-1; i++)
+			{
+				vector motion = nodes[i+1]->get_pos()-nodes[i]->get_pos();
+				motion = motion.normalize();
+				nodes[i]->move_rel_pos(motion*distance);
+
+				if(i == num_nodes-2)
+				{
+					nodes[num_nodes-1]->move_rel_pos(motion*distance);
+				}
+			}
+
+
+			
+		}
+
+		void retract(double distance)
+		{
+			for(int i = num_nodes-1; i > 0 ; i--)
+			{
+				vector motion = nodes[i-1]->get_pos()-nodes[i]->get_pos();
+				motion = motion.normalize();
+				nodes[i]->move_rel_pos(motion*distance);
+
+				if(i == 1)
+				{
+					nodes[0]->move_rel_pos(motion*distance);
+				}
+			}
+
+		}
+
 		// returns the direction from the base node tothe next node
 		double get_dir(int coord)
 		{
@@ -2737,19 +2771,19 @@ int main()
 	// assume that scale is at 1000 sim units = 1 "real" meter. 1 sim = 1 mm
 
 	// catheter params
-	double x_start = 2;
-	double y_start = 110;
+	double x_start = -50;
+	double y_start = 50;
 	double x_dir = 1;
 	double y_dir = 0;
 	double joint_dist = 3;
-	int num_segs = 8;
+	int num_segs = 20;
 	double node_rad = 0.445/2;
 	double spring_const = 70;
 
 	// collisoion detection params
 	double cd_res = 0.25;
 
-	environment env = environment("environments/neuro_model_half.txt", cd_res);
+	environment env = environment("environments/neuro_model_half_rotated.txt", cd_res);
 	std::vector<closed_obstacle> obs;
 	obs = env.get_obs();
 
@@ -2797,6 +2831,12 @@ int main()
             break;
 		case FSKEY_D:
 			cath.rotate_tip( catheter::CW);
+            break;
+		case FSKEY_W:
+			cath.insert( mv_vel*dt);
+            break;
+		case FSKEY_S:
+			cath.retract( mv_vel*dt);
             break;
 		case FSKEY_Q:
 			// show SDF
