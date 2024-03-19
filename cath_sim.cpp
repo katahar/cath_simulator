@@ -2775,7 +2775,7 @@ class catheter : public render_entity
 				double penetration_dist1 = det.get_penetration_dist(nd1);
 				double penetration_dist2 = det.get_penetration_dist(nd2);
 
-				if(split_penetration_dist>penetration_dist1 || split_penetration_dist>penetration_dist2)
+				if(split_penetration_dist>nd1->get_rad()*1.5 &&  (split_penetration_dist>penetration_dist1 || split_penetration_dist>penetration_dist2))
 				{
 					// std::cout << "split penetration distance " << split_penetration_dist << std::endl;
 					// std::cout << "penetration distance 1" << penetration_dist1 << std::endl;
