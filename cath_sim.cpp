@@ -170,6 +170,18 @@ class vector
 			return ret_vec;
 		}
 
+		// gets angle between this vector toward the other vector
+		double get_angle(vector other )
+		{
+			// https://stackoverflow.com/questions/21483999/using-atan2-to-find-angle-between-two-vectors/21486462#21486462
+				vector A = *this ;
+				vector B = other;
+				double angle = atan2(B.at(1), B.at(0))-atan2(A.at(1), A.at(0));
+				// normalize it to the range [0, 2 π):
+				if (angle < 0) {angle  += 2 *PI; }	
+				return angle;
+		}
+
 		// assumes radians
 		vector rotate(double angle)
 		{
@@ -307,7 +319,7 @@ class render_entity
 		const int X = 0;
 		const int Y = 1;
 
-		double scale = 2; // pixels/sim unit
+		double scale = 4; // pixels/sim unit
 		
 
 		// @TODO: Add x rendering criteria too
@@ -1465,26 +1477,31 @@ class sdf2D: public render_entity
 
 			fill_sdf(obstacles);
 
-			// int x_low, x_high, y_low, y_high;
-			// real_to_sdf(x_low, y_low, 217,120);
-			// real_to_sdf(x_high, y_high, 225,140);
-			// std::cout << "x window: " << x_low << ", " << x_high << "\t y window" << y_low << ", " << y_high << std::endl;
-			// // print all values in sdf
-			// for(int j = y_high; j > y_low; j--)
-			// {
-			// 	for(int i = x_low; i < x_high; i++)
-			// 	{
-			// 		if(get_sdf_val(i, j) != 0)
-			// 		{
-			// 			std::cout <<     printf("%.1f", get_sdf_val(i, j) )<< " " ;
-			// 		}
-			// 		else
-			// 		{
-			// 			std::cout <<     printf("*.*") << " " ;
-			// 		}
-			// 	}
-			// 	std:: cout << "" << std::endl;
-			// }
+			int x_low, x_high, y_low, y_high;
+			real_to_sdf(x_low, y_low, 97,30);
+			real_to_sdf(x_high, y_high, 99,40);
+			std::cout << "x window: " << x_low << ", " << x_high << "\t y window" << y_low << ", " << y_high << std::endl;
+			// print all values in sdf
+			for(int j = y_high; j > y_low; j--)
+			{
+				for(int i = x_low; i < x_high; i++)
+				{
+					
+					if(get_sdf_val(i, j) >0)
+					{
+						std::cout << " " <<printf("%.3f", get_sdf_val(i, j) ) << " " ;
+					}
+					else if(get_sdf_val(i, j) != 0)
+					{
+						std::cout <<     printf("%.3f", get_sdf_val(i, j) )<< " " ;
+					}
+					else
+					{
+						std::cout << "* .  *" << " " ;
+					}
+				}
+				std:: cout << "" << std::endl;
+			}
 			
 			std::cout << "SDF complete." << std::endl;
 		}
@@ -2167,6 +2184,30 @@ class collision_detector
 			return nd1->get_rad() - dist_field.get_sdf_val(x_sdf, y_sdf) ;
 		}
 
+		double get_max_split_pen_dist(node* node1, node* node2, int samples, vector& local_grad)
+		{
+			int x_sdf, y_sdf; 
+			double temp_pen_dist;
+			double max_pen_dist = std::max(this->get_penetration_dist(node1), this->get_penetration_dist(node2));
+			vector step = (node2->get_pos()-node1->get_pos())/(samples+1);
+			for(int i = 1; i < samples+1; i++)
+			{
+				dist_field.real_to_sdf(x_sdf, y_sdf, (node1->get_pos(0)+(step.at(0)*i)), (node1->get_pos(1)+(step.at(1)*i)));
+				temp_pen_dist = node1->get_rad()-dist_field.get_sdf_val(x_sdf, y_sdf);
+				
+				if(max_pen_dist<temp_pen_dist)
+				{
+					max_pen_dist = temp_pen_dist;
+					local_grad = this->get_obs_norm(node1->get_pos(0)+(step.at(0)*i), node1->get_pos(1)+(step.at(1)*i));
+				}
+				
+
+			}
+			return max_pen_dist;
+
+		}
+		
+	
 		void copy(const collision_detector &incoming)
 		{
 			this->dist_field = incoming.dist_field;
@@ -2486,20 +2527,25 @@ class catheter : public render_entity
 			node->move_rel_pos(motion.at(0), motion.at(1));
 		}
 
+
 		void resolve_nd_split(node* node1, node* node2, double dt, double spring_const)
 		{
+			int num_samples = 10;
 			node1->reset();
 			node2->reset();
-			double split_penetration_dist = det.get_split_penetration_dist(node1,node2);
+
+			vector obstacle_norm = det.get_obs_norm((node1->get_pos(0)+node2->get_pos(0))/2, (node1->get_pos(1)+node2->get_pos(1))/2);
+			
+			double split_penetration_dist = det.get_max_split_pen_dist(node1,node2, num_samples, obstacle_norm);
 			
 			// std::cout << "split penetration distance " << split_penetration_dist << std::endl;
 			
-			vector obstacle_norm = det.get_obs_norm((node1->get_pos(0)+node2->get_pos(0))/2, (node1->get_pos(1)+node2->get_pos(1))/2);
 			vector motion = obstacle_norm*split_penetration_dist*-1;
 			node1->move_rel_pos(motion.at(0), motion.at(1));
 			node2->move_rel_pos(motion.at(0), motion.at(1));
 
 		}
+
 
 		void update(double dt)
 		{
@@ -2551,7 +2597,8 @@ class catheter : public render_entity
 				// std::cout << "bending force for joint " <<  std::to_string(i) << "...." <<std::endl;
 				
 				// angle is too sudden.
-				if(i>1 && nodes[i]->get_angle_dif()>PI/5)
+				if(false)
+				// if(i>1 && nodes[i]->get_angle_dif()>PI/5)
 				{
 					double center_diff = nodes[i]->get_angle_dif();
 					double neutral_old = nodes[i-1]->get_neutral_angle();
@@ -2717,13 +2764,13 @@ class catheter : public render_entity
 		// checks collision between nodes 
 		bool seg_collision(node* nd1, node* nd2)
 		{
-
 			// could be split by an obstacle.
-			// if(1 == det.check_collision(nd1) && 1 == det.check_collision(nd2))
-			if(det.get_penetration_dist(nd1)<1.5*nd1->get_rad() && det.get_penetration_dist(nd2)<1.5*nd2->get_rad())
+			if(det.get_penetration_dist(nd1)<1.5*nd1->get_rad() || det.get_penetration_dist(nd2)<1.5*nd2->get_rad())
+			// if(det.get_penetration_dist(nd1)<nd1->dist(nd2) || det.get_penetration_dist(nd2)<nd1->dist(nd2))
 			{
 				// std::cout << nd1->to_string() <<std::endl;
 				// std::cout << nd2->to_string() <<std::endl;
+
 				double split_penetration_dist = det.get_split_penetration_dist(nd1,nd2);
 				double penetration_dist1 = det.get_penetration_dist(nd1);
 				double penetration_dist2 = det.get_penetration_dist(nd2);
@@ -2738,6 +2785,7 @@ class catheter : public render_entity
 			}
 			return false;
 		}
+
 
 		~catheter()
 		{
@@ -2772,7 +2820,7 @@ int main()
 
 	// catheter params
 	double x_start = -50;
-	double y_start = 50;
+	double y_start = 29;
 	double x_dir = 1;
 	double y_dir = 0;
 	double joint_dist = 3;
@@ -2783,7 +2831,7 @@ int main()
 	// collisoion detection params
 	double cd_res = 0.25;
 
-	environment env = environment("environments/neuro_model_half_rotated.txt", cd_res);
+	environment env = environment("environments/neuro_model_channel.txt", cd_res);
 	std::vector<closed_obstacle> obs;
 	obs = env.get_obs();
 
